@@ -24,8 +24,13 @@
 | `package.json` 的 `version` | 单一真源。`electron-builder` 用它给安装包版本，应用内 `app.getVersion()` 也读它 |
 | `src/lib/version.ts` 的 `APP_VERSION` | 渲染进程展示用（「关于」页、设置页版本卡片） |
 
-`npm run check:version` 会校验两者一致、版本号符合 SemVer、更新记录按版本从新到旧排列且顶部就是当前版本。
-它已纳入 `verify:static`，所以写错版本号会让 `npm run verify` 直接失败。
+`npm run check:version` 会校验两者一致、版本号符合 SemVer、更新记录按版本从新到旧排列且顶部就是当前版本，
+并在能读到 git 信息时要求存在对应的 `vX.Y.Z` tag。它已纳入 `verify:static`，所以写错版本号会让 `npm run verify` 直接失败。
+
+> **注意**：因为包含 tag 检查，**刚升完版本号、还没打 tag 时 `npm run verify` 会失败**，这是刻意的——
+> 它把「升了版本却没落 tag」变成显式错误。正常顺序是：改版本号 → 跑 `verify`（此时会提示缺 tag，
+> 这是预期的）→ 提交 → `git tag` → 再跑一次 `verify` 确认通过。若只想在升版途中做静态检查，
+> 可单独跑 `npm run typecheck && npm run lint && npm run check:theme`。
 
 ## 2. 更新记录
 
