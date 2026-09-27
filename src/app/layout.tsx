@@ -18,6 +18,7 @@ import { Project } from '@/lib/queries/projects';
 import FloatingButton from '@/components/shared/FloatingButton';
 import FeedbackProvider from '@/components/shared/Feedback';
 import ThemeProvider, { THEME_BOOTSTRAP_SCRIPT } from '@/components/shared/ThemeProvider';
+import { APP_NAME, APP_NAME_FULL } from '@/lib/version';
 
 const NAV_ITEMS = [
   { href: '/',         icon: LayoutDashboard, label: '仪表盘' },
@@ -25,8 +26,8 @@ const NAV_ITEMS = [
   { href: '/timeline', icon: CalendarRange,   label: '时间线' },
 ];
 
-const SIDEBAR_STORAGE_KEY = 'project-tracker-sidebar-collapsed';
-const SIDEBAR_CHANGED_EVENT = 'project-tracker-sidebar-changed';
+const SIDEBAR_STORAGE_KEY = 'baton-sidebar-collapsed';
+const SIDEBAR_CHANGED_EVENT = 'baton-sidebar-changed';
 
 function subscribeToSidebar(onStoreChange: () => void) {
   window.addEventListener('resize', onStoreChange);
@@ -91,7 +92,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <title>ProjectTracker</title>
+        <title>{APP_NAME_FULL}</title>
         <meta name="description" content="本地多项目并行管理工作台" />
         <meta name="theme-color" content="#FAFAFB" />
       </head>
@@ -129,7 +130,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 />
                 {!collapsed && (
                   <span className="text-sm font-bold text-primary tracking-tight truncate">
-                    ProjectTracker
+                    {APP_NAME}
                   </span>
                 )}
               </div>

@@ -13,7 +13,7 @@
  *   3. 开发中的改动先累积在「未发布」分组，打包交付时再定版本号落地。
  */
 
-export const APP_VERSION = '1.5.1';
+export const APP_VERSION = '2.0.0';
 
 export interface ChangeGroup {
   /** 分组标题，使用 Conventional Commits 的类型词。 */
@@ -40,6 +40,36 @@ export const CHANGE_GROUP_LABELS: Record<ChangeGroup['kind'], string> = {
 
 /** 最新版本在最上方。 */
 export const CHANGELOG: VersionEntry[] = [
+  {
+    version: '2.0.0',
+    released: '2026-09-27',
+    summary: '更名为 Baton（执筹）。这是产品标识的整体更换，因此升主版本号。',
+    groups: [
+      {
+        kind: 'feat',
+        items: [
+          '新名称：Baton（执筹）。Baton 是乐队指挥棒，对应「同时指挥多条线」；'
+          + '执筹取自「运筹」「统筹」，即筹划与调度多件事。',
+          '应用名、窗口标题、安装包与快捷方式、托盘提示、界面与「关于」页全部更新。',
+        ],
+      },
+      {
+        kind: 'fix',
+        items: [
+          '数据目录自动迁移：首次运行会把 %APPDATA%\\project-tracker 整体搬到 '
+          + '%APPDATA%\\baton，设置、数据库与备份一并保留，无需手动处理。',
+          '旧名称的开机自启注册表项会被删除；若此前开着自启，会按新名称自动重新登记。',
+        ],
+      },
+      {
+        kind: 'chore',
+        items: [
+          '内部标识同步更换：包名 baton、安装包 ID com.baton.app、可执行文件 Baton.exe、'
+          + '相关环境变量与临时目录前缀；界面显示名统一取自 src/lib/version.ts，不再散落硬编码。',
+        ],
+      },
+    ],
+  },
   {
     version: '1.5.1',
     released: '2026-09-27',
@@ -219,10 +249,19 @@ export const CHANGELOG: VersionEntry[] = [
   },
 ];
 
+/**
+ * 应用名。Baton（指挥棒）：同时指挥多条线，对应「并行推进多个项目」。
+ * 中文名「执筹」取自「运筹」与「统筹」，即筹划、调度多件事。
+ */
+export const APP_NAME = 'Baton';
+export const APP_NAME_ZH = '执筹';
+/** 需要同时展示中英文时的写法。 */
+export const APP_NAME_FULL = 'Baton 执筹';
+
 export const APP_TAGLINE = '本地多项目并行管理工作台';
 
 export const APP_DESCRIPTION =
-  'ProjectTracker 是一个纯本地运行的桌面工作台，用来同时推进多个项目：'
+  `Baton（执筹）是一个纯本地运行的桌面工作台，用来同时推进多个项目：`
   + '把任务放进看板按阶段流转，遇到卡点就记录阻塞原因，解决后自动回到进行中。'
   + '所有数据保存在本机的一个 SQLite 文件里，不联网、不上传，删除一律是可恢复的归档。';
 
@@ -240,5 +279,5 @@ export const APP_STACK: { label: string; value: string }[] = [
   { label: '桌面外壳', value: 'Electron 43 · 内嵌服务运行在 127.0.0.1:3099' },
   { label: '数据存储', value: 'sql.js（SQLite WASM）· 单文件 tracker.db · 事务快照 + 原子替换' },
   { label: '样式', value: 'Tailwind CSS v4 · CSS 变量主题令牌' },
-  { label: '数据位置', value: '%APPDATA%\\project-tracker\\data\\tracker.db' },
+  { label: '数据位置', value: '%APPDATA%\\baton\\data\\tracker.db' },
 ];

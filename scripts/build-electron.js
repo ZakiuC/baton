@@ -6,9 +6,9 @@ const path = require('path');
 const projectRoot = path.resolve(__dirname, '..');
 const directoryMode = process.argv.includes('--dir');
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-const configuredOutput = process.env.PROJECT_TRACKER_BUILD_DIR;
+const configuredOutput = process.env.BATON_BUILD_DIR;
 const outputDirectory = path.resolve(
-  configuredOutput || path.join(os.tmpdir(), 'project-tracker-builds', timestamp),
+  configuredOutput || path.join(os.tmpdir(), 'baton-builds', timestamp),
 );
 
 function runNodeScript(label, scriptPath, args) {
@@ -58,7 +58,7 @@ runNodeScript(
 if (directoryMode) {
   const unpackedRoot = path.join(outputDirectory, 'win-unpacked');
   const requiredFiles = [
-    path.join(unpackedRoot, 'ProjectTracker.exe'),
+    path.join(unpackedRoot, 'Baton.exe'),
     path.join(unpackedRoot, 'resources', 'standalone', 'server.js'),
     path.join(unpackedRoot, 'resources', 'standalone', '.next', 'static'),
     path.join(unpackedRoot, 'resources', 'standalone', 'node_modules', 'next', 'package.json'),

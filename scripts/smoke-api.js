@@ -9,16 +9,16 @@ const initSqlJs = require('sql.js');
 
 const projectRoot = path.resolve(__dirname, '..');
 const serverPath = path.join(projectRoot, '.next', 'standalone', 'server.js');
-const temporaryDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'project-tracker-api-'));
+const temporaryDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-api-'));
 const temporaryDatabase = path.join(temporaryDataDirectory, 'tracker.db');
-const productionDatabase = process.env.PROJECT_TRACKER_PRODUCTION_DB
+const productionDatabase = process.env.BATON_PRODUCTION_DB
   || (process.env.APPDATA
-    ? path.join(process.env.APPDATA, 'project-tracker', 'data', 'tracker.db')
+    ? path.join(process.env.APPDATA, 'baton', 'data', 'tracker.db')
     : null);
-const fixtureDatabase = process.env.PROJECT_TRACKER_TEST_FIXTURE_DB
+const fixtureDatabase = process.env.BATON_TEST_FIXTURE_DB
   || (productionDatabase && fs.existsSync(productionDatabase) ? productionDatabase : null);
 const productionDataDirectory = productionDatabase ? path.dirname(productionDatabase) : null;
-const keepTemporaryData = process.env.PROJECT_TRACKER_KEEP_TEMP === '1';
+const keepTemporaryData = process.env.BATON_KEEP_TEMP === '1';
 /** 与 src/lib/db.ts 的 DATABASE_VERSION 对应。 */
 const EXPECTED_DATABASE_VERSION = 2;
 
@@ -68,13 +68,13 @@ function assertIsolatedDataDirectory() {
 
 /**
  * 默认清理本轮临时目录；失败时保留现场供排查，需要强制保留时设置
- * PROJECT_TRACKER_KEEP_TEMP=1。只删除带前缀且位于系统临时目录内的目录。
+ * BATON_KEEP_TEMP=1。只删除带前缀且位于系统临时目录内的目录。
  */
 function cleanupTemporaryData() {
   if (keepTemporaryData) return;
   const temporary = path.resolve(temporaryDataDirectory);
   const temporaryRoot = path.resolve(os.tmpdir());
-  if (!path.basename(temporary).startsWith('project-tracker-api-')) return;
+  if (!path.basename(temporary).startsWith('baton-api-')) return;
   if (!temporary.startsWith(temporaryRoot + path.sep)) return;
   try {
     fs.rmSync(temporary, { recursive: true, force: true });

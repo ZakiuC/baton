@@ -9,15 +9,73 @@ const {
 const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
-const { spawn } = require("child_process");
+const { spawn, execFileSync } = require("child_process");
 const http = require("http");
 const AutoLaunch = require("auto-launch");
 
 // === 持久化设置 ===
-const configuredUserDataPath = process.env.PROJECT_TRACKER_USER_DATA_DIR;
+const configuredUserDataPath = process.env.BATON_USER_DATA_DIR;
 const canonicalUserDataPath = configuredUserDataPath
   ? path.resolve(configuredUserDataPath)
-  : path.join(app.getPath("appData"), "project-tracker");
+  : path.join(app.getPath("appData"), "baton");
+
+/**
+ * 应用原名 ProjectTracker，数据目录是 %APPDATA%\project-tracker，
+ * 开机自启注册表项名也是 ProjectTracker。改名后如果不处理，
+ * 用户的设置与数据库会被「遗忘」，自启项还会指向已不存在的旧 exe。
+ *
+ * 因此首次运行时：把旧目录整体搬到新目录；删掉旧的自启项；
+ * 若用户此前开着自启，则按新名称重新注册，保证行为不变。
+ *
+ * 只在「旧目录存在且新目录不存在」时执行一次；显式指定数据目录（如测试）时跳过。
+ */
+function migrateLegacyUserData(newPath) {
+  if (process.env.BATON_USER_DATA_DIR) return;
+  const legacyPath = path.join(app.getPath("appData"), "project-tracker");
+  if (!fs.existsSync(legacyPath) || fs.existsSync(newPath)) return;
+
+  try {
+    fs.renameSync(legacyPath, newPath);
+    console.log("[main] 已将数据目录从 project-tracker 迁移到 baton：", newPath);
+  } catch {
+    // 目录被占用时 rename 会失败，退化为复制
+    try {
+      fs.cpSync(legacyPath, newPath, { recursive: true, force: true });
+      console.log("[main] 已复制旧数据目录到 baton（原目录保留）：", newPath);
+    } catch (copyError) {
+      console.error("[main] 数据目录迁移失败，将使用全新目录：", copyError);
+    }
+  }
+
+  // 旧设置里是否开着自启，由启动后的 reconcileAutoLaunch() 依据 settings.json 处理
+
+  // auto-launch 通过应用名定位注册表项，无法删除旧名称的项，直接操作注册表。
+  // 新名称的自启登记不在这里做——那时 autoLauncher 还没初始化，
+  // 统一交给启动后的 reconcileAutoLaunch()。
+  cleanupLegacyAutostartEntry();
+}
+
+/**
+ * 删除旧名称（ProjectTracker）的开机自启注册表项。
+ * 刻意做成幂等并在每次启动时调用，而不是只在数据目录迁移时调用一次：
+ * 数据目录可能已经被更早的版本搬走了，但那条指向已不存在 exe 的注册表项还在。
+ */
+function cleanupLegacyAutostartEntry() {
+  try {
+    execFileSync("reg", [
+      "delete",
+      "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+      "/v",
+      "ProjectTracker",
+      "/f",
+    ], { stdio: "ignore" });
+    console.log("[main] 已删除旧名称的开机自启注册表项");
+  } catch {
+    // 本来就不存在时会失败，属正常
+  }
+}
+
+migrateLegacyUserData(canonicalUserDataPath);
 app.setPath("userData", canonicalUserDataPath);
 const userDataPath = app.getPath("userData");
 const settingsPath = path.join(userDataPath, "settings.json");
@@ -60,8 +118,24 @@ function saveSettings(s) {
   return merged;
 }
 function getSetting(key) { return loadSettings()[key]; }
+
+/**
+ * 让开机自启的注册表状态与 settings.json 对齐。
+ * 每次启动都执行，因此改名后无需额外步骤：只要设置里是开启的，
+ * 就会按新名称重新登记（旧的 ProjectTracker 项已在迁移时删除）。
+ */
+async function reconcileAutoLaunch() {
+  if (!getSetting("autoLaunch")) return;
+  try {
+    if (await autoLauncher.isEnabled()) return;
+    await autoLauncher.enable();
+    console.log("[main] 已按当前名称登记开机自启");
+  } catch (error) {
+    console.error("[main] 登记开机自启失败：", error);
+  }
+}
 // === 开机自启 ===
-const autoLauncher = new AutoLaunch({ name: "ProjectTracker" });
+const autoLauncher = new AutoLaunch({ name: "Baton" });
 
 let mainWindow = null;
 let tray = null;
@@ -217,7 +291,7 @@ async function createWindow() {
     height: 900,
     minWidth: 900,
     minHeight: 600,
-    title: "ProjectTracker",
+    title: "Baton",
     backgroundColor: "#FAFAFB",
     // 使用原生标题栏，确保关闭/最小化/最大化始终可用
     frame: true,
@@ -255,7 +329,7 @@ async function createWindow() {
 // === 托盘 ===
 function createTray() {
   tray = new Tray(createTrayIcon());
-  tray.setToolTip("ProjectTracker");
+  tray.setToolTip("Baton");
   const buildMenu = () => Menu.buildFromTemplate([
     { label: "显示窗口", click: () => { mainWindow?.show(); mainWindow?.focus(); } },
     { type: "separator" },
@@ -366,9 +440,8 @@ if (!hasSingleInstanceLock) {
       await createWindow();
       createTray();
 
-      if (getSetting("autoLaunch")) {
-        autoLauncher.isEnabled().then(en => { if (!en) autoLauncher.enable().catch(() => {}); }).catch(() => {});
-      }
+      cleanupLegacyAutostartEntry();
+      await reconcileAutoLaunch();
       app.on("activate", () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
         else mainWindow?.show();

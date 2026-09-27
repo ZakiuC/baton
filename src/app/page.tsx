@@ -11,6 +11,7 @@ import ProjectForm from '@/components/forms/ProjectForm';
 import { DashboardStats, ProjectProgress, UrgentItem } from '@/lib/queries/dashboard';
 import { ActivityLog } from '@/lib/queries/activity';
 import { useFeedback } from '@/components/shared/Feedback';
+import { APP_NAME_FULL } from '@/lib/version';
 
 function SkeletonCard() {
   return (
@@ -142,7 +143,7 @@ export default function DashboardPage() {
     return (
       <div className="p-8 animate-fade-in">
         <EmptyState
-          title="欢迎使用 ProjectTracker"
+          title={`欢迎使用 ${APP_NAME_FULL}`}
           description="开始管理你的多项目工作流。首先创建一个项目，然后添加任务。"
           headingLevel="h1"
           action={

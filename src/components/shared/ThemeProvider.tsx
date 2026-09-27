@@ -58,7 +58,7 @@ export const THEME_BOOTSTRAP_SCRIPT = `(() => {
   } catch {}
 })();`;
 
-const THEME_CHANGED_EVENT = 'project-tracker-theme-changed';
+const THEME_CHANGED_EVENT = 'baton-theme-changed';
 
 /**
  * 主题的持久化有两个来源，职责不同：

@@ -1,9 +1,9 @@
 {
-  "name": "project-tracker",
-  "version": "1.5.1",
+  "name": "baton",
+  "version": "2.0.0",
   "private": true,
   "description": "本地多项目并行管理工具",
-  "author": "ProjectTracker",
+  "author": "Baton",
   "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
@@ -26,8 +26,8 @@
     "verify": "npm run verify:static && npm run build && npm run test:api:built && npm run test:ui:built"
   },
   "build": {
-    "appId": "com.projecttracker.app",
-    "productName": "ProjectTracker",
+    "appId": "com.baton.app",
+    "productName": "Baton",
     "directories": {
       "output": "release"
     },
@@ -61,7 +61,7 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "ProjectTracker"
+      "shortcutName": "Baton"
     }
   },
   "dependencies": {

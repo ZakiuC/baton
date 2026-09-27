@@ -1,6 +1,6 @@
 # 仓库与交付规范
 
-本文约定 ProjectTracker 的版本号、提交、分支与交付流程。目标是让任何一次改动都能回答三个问题：
+本文约定 Baton 的版本号、提交、分支与交付流程。目标是让任何一次改动都能回答三个问题：
 **改了哪个版本、怎么回退、怎么验证**。不确定的地方一律采用当前主流做法，并在文末给出取舍理由。
 
 ---
@@ -128,8 +128,8 @@ git push --tags
 4. **构建产物**：`npm run build:electron:dir`（自带产物自检：运行依赖完整、`sql-wasm.wasm` 恰好 1 个、`tracker.db*` 为 0）。
 5. **替换安装目录**：把新产物替换到 `release/win-unpacked`，**旧产物改名保留**而不是删除。
 6. **提交**：`git add -A && git commit -m "chore(release): v1.3.0"`（正文写这一版的主要内容）。
-7. **打 tag**：`git tag -a v1.3.0 -m "ProjectTracker 1.3.0"`。tag 是版本的锚点，**每次交付都要打**。
-8. **验证安装包**：启动 `release/win-unpacked/ProjectTracker.exe`，确认进程数、`127.0.0.1:3099` 可访问、
+7. **打 tag**：`git tag -a v1.3.0 -m "Baton 1.3.0"`。tag 是版本的锚点，**每次交付都要打**。
+8. **验证安装包**：启动 `release/win-unpacked/Baton.exe`，确认进程数、`127.0.0.1:3099` 可访问、
    生产数据库哈希未变，并在「关于」页看到正确版本号。
 9. **记录台账**：在仓库上级的 `WORKLOG.md` 追加条目，写明目标、现状与验证证据。
 

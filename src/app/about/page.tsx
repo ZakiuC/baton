@@ -12,6 +12,7 @@ import {
 import {
   APP_DESCRIPTION,
   APP_FEATURES,
+  APP_NAME_FULL,
   APP_STACK,
   APP_TAGLINE,
   CHANGE_GROUP_LABELS,
@@ -50,7 +51,7 @@ export default function AboutPage() {
           />
           <div className="min-w-0">
             <h2 id="about-title" className="text-base font-semibold text-primary tracking-tight">
-              ProjectTracker
+              {APP_NAME_FULL}
             </h2>
             <p className="text-xs text-muted mt-0.5">{APP_TAGLINE}</p>
             <div className="flex items-center gap-2 mt-2.5 flex-wrap">

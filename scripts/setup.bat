@@ -1,16 +1,16 @@
 @echo off
-:: ProjectTracker 一键安装脚本
+:: Baton 一键安装脚本
 :: 功能：创建桌面快捷方式 + 首次启动
-:: 说明：应用入口统一为打包产物 release\win-unpacked\ProjectTracker.exe；
+:: 说明：应用入口统一为打包产物 release\win-unpacked\Baton.exe；
 ::       开机自启请在应用「设置」页开启（写入 HKCU\...\CurrentVersion\Run）。
 
 set "PROJECT_DIR=%~dp0.."
 cd /d "%PROJECT_DIR%"
 
-set "APP_EXE=%PROJECT_DIR%\release\win-unpacked\ProjectTracker.exe"
+set "APP_EXE=%PROJECT_DIR%\release\win-unpacked\Baton.exe"
 
 echo ========================================
-echo   ProjectTracker 一键安装
+echo   Baton 一键安装
 echo ========================================
 echo.
 
@@ -38,7 +38,7 @@ echo [完成] 已找到应用：%APP_EXE%
 
 :: 2. 创建桌面快捷方式
 set "DESKTOP=%USERPROFILE%\Desktop"
-set "SHORTCUT=%DESKTOP%\ProjectTracker.lnk"
+set "SHORTCUT=%DESKTOP%\Baton.lnk"
 echo [进度] 创建桌面快捷方式...
 powershell -NoProfile -Command ^
     "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%SHORTCUT%'); $SC.TargetPath='%APP_EXE%'; $SC.WorkingDirectory='%PROJECT_DIR%\release\win-unpacked'; $SC.IconLocation='%APP_EXE%'; $SC.Save()"
@@ -51,18 +51,18 @@ echo [完成] 桌面快捷方式已创建
 
 :: 3. 选择是否现在启动
 echo.
-set /p STARTNOW="现在启动 ProjectTracker？[Y/n]: "
+set /p STARTNOW="现在启动 Baton？[Y/n]: "
 if /i "%STARTNOW%"=="n" goto :end
 
-echo [进度] 启动 ProjectTracker...
+echo [进度] 启动 Baton...
 start "" "%APP_EXE%"
-echo [完成] ProjectTracker 已启动（窗口关闭时会最小化到系统托盘）
+echo [完成] Baton 已启动（窗口关闭时会最小化到系统托盘）
 
 :end
 echo.
 echo ========================================
 echo  安装完成！
-echo  双击桌面 "ProjectTracker" 图标启动
+echo  双击桌面 "Baton" 图标启动
 echo  开机自启：应用内「设置」页开启
 echo ========================================
 pause

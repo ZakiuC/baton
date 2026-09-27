@@ -86,7 +86,7 @@ if (tags === null) {
   if (!tags.includes(expectedTag)) {
     problems.push(
       `缺少版本 tag ${expectedTag}；发版流程要求「升版本号 + 提交 + 打 tag」，`
-      + `执行：git tag -a ${expectedTag} -m "ProjectTracker ${packageJson.version}"`,
+      + `执行：git tag -a ${expectedTag} -m "Baton ${packageJson.version}"`,
     );
   }
 }

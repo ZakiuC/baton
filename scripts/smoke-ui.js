@@ -9,22 +9,29 @@ const projectRoot = path.resolve(__dirname, '..');
 const projectPackageJson = JSON.parse(
   fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'),
 );
+/** 应用展示名取自 src/lib/version.ts，避免在断言里写死名称。 */
+const expectedAppName = (() => {
+  const source = fs.readFileSync(path.join(projectRoot, 'src', 'lib', 'version.ts'), 'utf8');
+  const match = source.match(/export const APP_NAME_FULL = '([^']+)'/);
+  if (!match) throw new Error('未能从 src/lib/version.ts 读取 APP_NAME_FULL');
+  return match[1];
+})();
 const standaloneDirectory = path.join(projectRoot, '.next', 'standalone');
 const serverPath = path.join(standaloneDirectory, 'server.js');
 const productionDatabase = process.env.APPDATA
-  ? path.join(process.env.APPDATA, 'project-tracker', 'data', 'tracker.db')
+  ? path.join(process.env.APPDATA, 'baton', 'data', 'tracker.db')
   : null;
-const keepTemporaryData = process.env.PROJECT_TRACKER_KEEP_TEMP === '1';
+const keepTemporaryData = process.env.BATON_KEEP_TEMP === '1';
 
 /**
  * 默认清理本轮临时目录；失败时保留现场供排查，需要强制保留时设置
- * PROJECT_TRACKER_KEEP_TEMP=1。只删除带前缀且位于系统临时目录内的目录。
+ * BATON_KEEP_TEMP=1。只删除带前缀且位于系统临时目录内的目录。
  */
 function cleanupTemporaryRoot(temporaryRoot) {
   if (keepTemporaryData) return;
   const resolved = path.resolve(temporaryRoot);
   const temporaryDirectory = path.resolve(os.tmpdir());
-  if (!path.basename(resolved).startsWith('project-tracker-ui-smoke-')) return;
+  if (!path.basename(resolved).startsWith('baton-ui-smoke-')) return;
   if (!resolved.startsWith(temporaryDirectory + path.sep)) return;
   try {
     fs.rmSync(resolved, { recursive: true, force: true });
@@ -130,7 +137,7 @@ async function run() {
   }
 
   const electronExecutable = require('electron');
-  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'project-tracker-ui-smoke-'));
+  const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'baton-ui-smoke-'));
   const temporaryDataDirectory = path.join(temporaryRoot, 'data');
   const temporaryProfileDirectory = path.join(temporaryRoot, 'electron-profile');
   fs.mkdirSync(temporaryDataDirectory, { recursive: true });
@@ -145,7 +152,7 @@ async function run() {
   }
   const resolvedTemporaryRoot = path.resolve(temporaryRoot);
   const systemTemporaryDirectory = path.resolve(os.tmpdir());
-  if (!path.basename(resolvedTemporaryRoot).startsWith('project-tracker-ui-smoke-')
+  if (!path.basename(resolvedTemporaryRoot).startsWith('baton-ui-smoke-')
     || !resolvedTemporaryRoot.startsWith(systemTemporaryDirectory + path.sep)) {
     throw new Error(`安全检查失败：临时根目录必须位于系统临时目录内且带前缀：${resolvedTemporaryRoot}`);
   }
@@ -184,8 +191,8 @@ async function run() {
     // require('electron') 只会返回模块路径字符串，测试会以难以理解的方式失败。
     const runnerEnvironment = {
       ...process.env,
-      PROJECT_TRACKER_UI_SMOKE_URL: baseUrl,
-      PROJECT_TRACKER_UI_SMOKE_PROFILE: temporaryProfileDirectory,
+      BATON_UI_SMOKE_URL: baseUrl,
+      BATON_UI_SMOKE_PROFILE: temporaryProfileDirectory,
     };
     delete runnerEnvironment.ELECTRON_RUN_AS_NODE;
     runner = spawn(electronExecutable, [__filename, '--electron-runner'], {
@@ -241,8 +248,8 @@ async function runElectronSuite() {
     );
   }
   const { app, BrowserWindow, ipcMain, session } = electronModule;
-  const baseUrl = process.env.PROJECT_TRACKER_UI_SMOKE_URL;
-  const profileDirectory = process.env.PROJECT_TRACKER_UI_SMOKE_PROFILE;
+  const baseUrl = process.env.BATON_UI_SMOKE_URL;
+  const profileDirectory = process.env.BATON_UI_SMOKE_PROFILE;
   if (!baseUrl || !profileDirectory) throw new Error('Electron UI 冒烟缺少隔离运行参数');
 
   app.setPath('userData', path.resolve(profileDirectory));
@@ -386,7 +393,7 @@ async function runElectronSuite() {
   });
 
   function rendererExpression(method, args = []) {
-    return `globalThis.__projectTrackerUiSmoke.${method}(...${JSON.stringify(args)})`;
+    return `globalThis.__batonUiSmoke.${method}(...${JSON.stringify(args)})`;
   }
   const renderer = (method, ...args) => webContents.executeJavaScript(rendererExpression(method, args), true);
 
@@ -514,7 +521,7 @@ async function runElectronSuite() {
   let suiteFailure = null;
   // 看门狗：任何一步卡死（例如 preload 的同步 IPC 没有对应 handler）都要显式失败，
   // 而不是让整个 verify 无限等待。
-  const suiteTimeoutMs = Number(process.env.PROJECT_TRACKER_UI_TIMEOUT_MS || 240_000);
+  const suiteTimeoutMs = Number(process.env.BATON_UI_TIMEOUT_MS || 240_000);
   let watchdogFired = false;
   const watchdog = setTimeout(() => {
     watchdogFired = true;
@@ -578,7 +585,7 @@ async function runElectronSuite() {
           const linear = normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
           return sum + linear * [0.2126, 0.7152, 0.0722][index];
         }, 0);
-        globalThis.__projectTrackerUiSmoke = {
+        globalThis.__batonUiSmoke = {
           exists: (spec) => Boolean(find(spec)),
           absent: (spec) => !find(spec),
           count: (spec) => {
@@ -710,7 +717,7 @@ async function runElectronSuite() {
           themeModeIs: (mode) => document.documentElement.dataset.themeMode === mode,
           themeIdIs: (id) => document.documentElement.dataset.theme === id,
           storedTheme: () => {
-            try { return localStorage.getItem('project-tracker-theme'); } catch { return null; }
+            try { return localStorage.getItem('baton-theme'); } catch { return null; }
           },
           themeOptionNames: () => Array.from(document.querySelectorAll('#theme-options button'))
             .map((button) => (button.innerText || '').replace(/\s+/g, ' ').trim()),
@@ -965,7 +972,7 @@ async function runElectronSuite() {
       await reopened.loadURL(baseUrl);
       await delay(800);
       await reopened.webContents.executeJavaScript(
-        `localStorage.setItem('project-tracker-theme', 'linear-light')`,
+        `localStorage.setItem('baton-theme', 'linear-light')`,
         true,
       );
       await reopened.loadURL(baseUrl);
@@ -976,7 +983,7 @@ async function runElectronSuite() {
         `(() => ({
           theme: document.documentElement.dataset.theme,
           mode: document.documentElement.dataset.themeMode,
-          leftover: localStorage.getItem('project-tracker-theme'),
+          leftover: localStorage.getItem('baton-theme'),
         }))()`,
         true,
       );
@@ -1177,7 +1184,12 @@ async function runElectronSuite() {
     await injectRendererHelper();
     await waitFor('pathIs', ['/about'], '进入关于页');
     await waitFor('exists', [{ selector: 'h1', text: '关于', exact: true }], '关于页标题出现');
-    equal(await renderer('text', { selector: '#about-title' }), 'ProjectTracker', '关于页必须显示应用名');
+    // 应用名来自 src/lib/version.ts，不在这里写死字符串，改名后自动跟随。
+    equal(
+      await renderer('text', { selector: '#about-title' }),
+      expectedAppName,
+      '关于页必须显示应用名',
+    );
     // 版本号徽标的 class 恰好是 .badge，用文本内容断言而不是取第一个 .badge。
     check(
       await renderer(

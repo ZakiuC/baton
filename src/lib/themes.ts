@@ -344,4 +344,4 @@ const DEFAULT: Theme = { id: 'default', name: 'Original Indigo', mode: 'light',
 
 export const allThemes: Theme[] = [DEFAULT, ...DARK, ...LIGHT].map(completeTheme);
 
-export const THEME_STORAGE_KEY = 'project-tracker-theme';
+export const THEME_STORAGE_KEY = 'baton-theme';

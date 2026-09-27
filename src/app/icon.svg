@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="ProjectTracker">
-  <title>ProjectTracker</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Baton">
+  <title>Baton</title>
   <!--
-    ProjectTracker 的应用图标。
+    Baton 的应用图标。
     三条长短不一的任务条呼应时间线里的甘特条，右下对勾表示推进/完成。
     这是图标的唯一真源：electron/icon.ico、electron/tray.png 与 favicon.ico
     都由 npm run build:icon 从本文件生成，界面内的品牌标识也直接引用它，

@@ -5,7 +5,7 @@ import { Archive, ArrowLeft, Monitor, Power, Palette, Check, Sun, Moon, ChevronD
 import Link from 'next/link';
 import { useTheme } from '@/components/shared/ThemeProvider';
 import { allThemes, Theme } from '@/lib/themes';
-import { APP_TAGLINE } from '@/lib/version';
+import { APP_NAME_FULL, APP_TAGLINE } from '@/lib/version';
 import { useAppVersion } from '@/lib/use-app-version';
 import { useFeedback } from '@/components/shared/Feedback';
 import { useCanUseDOM, useIsElectron } from '@/lib/use-electron';
@@ -388,7 +388,7 @@ export default function SettingsPage() {
       <Link
         href="/about"
         className="card interactive-card p-4 flex items-center gap-3"
-        aria-label={`关于 ProjectTracker，当前版本 v${displayVersion}`}
+        aria-label={`关于 ${APP_NAME_FULL}，当前版本 v${displayVersion}`}
       >
         {/* 与应用图标保持一致，而不是用图标库里的近似字形 */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -401,7 +401,7 @@ export default function SettingsPage() {
           aria-hidden="true"
         />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-primary">ProjectTracker</p>
+          <p className="text-sm font-semibold text-primary">{APP_NAME_FULL}</p>
           <p className="text-xs text-muted mt-0.5">
             v{displayVersion} — {APP_TAGLINE}
           </p>
