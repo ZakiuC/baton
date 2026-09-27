@@ -1,6 +1,6 @@
 {
   "name": "project-tracker",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "description": "本地多项目并行管理工具",
   "author": "ProjectTracker",
@@ -13,6 +13,7 @@
     "start": "next start",
     "build:electron": "node scripts/build-electron.js",
     "build:electron:dir": "node scripts/build-electron.js --dir",
+    "build:icon": "node scripts/build-icon.js",
     "typecheck": "tsc --noEmit --incremental false --pretty false",
     "test:api": "npm run build && node scripts/smoke-api.js",
     "test:api:built": "node scripts/smoke-api.js",

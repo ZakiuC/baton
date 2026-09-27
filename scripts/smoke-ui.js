@@ -579,7 +579,16 @@ async function runElectronSuite() {
             return true;
           },
           pathIs: (pathname) => location.pathname === pathname,
-          viewportSize: () => ({ width: window.innerWidth, height: window.innerHeight }),
+          // 先强制一次样式/布局重算再读视口：窗口缩放后，隐藏窗口里的渲染进程
+          // 有时不会主动更新 window.innerWidth/Height，轮询会一直读到旧值。
+          viewportSize: () => {
+            void document.documentElement.offsetHeight;
+            return { width: window.innerWidth, height: window.innerHeight };
+          },
+          viewportIs: (width, height) => {
+            void document.documentElement.offsetHeight;
+            return window.innerWidth === width && window.innerHeight === height;
+          },
           scrollIntoView: (spec) => {
             const element = find(spec);
             if (!element) return false;
@@ -629,7 +638,6 @@ async function runElectronSuite() {
             element.dispatchEvent(new Event('change', { bubbles: true }));
             return element.value === value;
           },
-          viewportIs: (width, height) => window.innerWidth === width && window.innerHeight === height,
           shellMetrics: () => {
             const shell = document.querySelector('.app-shell');
             const main = document.querySelector('main');

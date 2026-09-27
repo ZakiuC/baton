@@ -73,14 +73,32 @@ const isDev = !app.isPackaged;
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 
 // === 托盘图标 ===
+/**
+ * 托盘图标取自随包的 electron/tray.png（由 scripts/build-icon.js 生成）。
+ * Windows 托盘实际只显示 16px，因此那张图是去掉对勾的简化版；
+ * 万一资源缺失则退回到运行时画一个靛蓝圆点，保证托盘不会没有图标。
+ */
 function createTrayIcon() {
+  const trayPath = path.join(__dirname, "tray.png");
+  try {
+    if (fs.existsSync(trayPath)) {
+      const image = nativeImage.createFromPath(trayPath);
+      if (!image.isEmpty()) return image;
+      console.error("[main] 托盘图标解析失败，改用内置圆点：", trayPath);
+    } else {
+      console.error("[main] 未找到托盘图标资源，改用内置圆点：", trayPath);
+    }
+  } catch (error) {
+    console.error("[main] 读取托盘图标失败，改用内置圆点：", error);
+  }
+
   const size = 16;
   const buf = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const i = (y * size + x) * 4;
       const d = Math.sqrt((x - 8) ** 2 + (y - 8) ** 2);
-      if (d < 7) { buf[i] = 99; buf[i + 1] = 102; buf[i + 2] = 241; buf[i + 3] = 255; }
+      if (d < 7) { buf[i] = 210; buf[i + 1] = 106; buf[i + 2] = 94; buf[i + 3] = 255; }
       else { buf[i + 3] = 0; }
     }
   }

@@ -47,3 +47,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 图标预览（由 npm run build:icon 生成）
+/.icon-preview/

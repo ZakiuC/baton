@@ -13,7 +13,7 @@
  *   3. 开发中的改动先累积在「未发布」分组，打包交付时再定版本号落地。
  */
 
-export const APP_VERSION = '1.4.0';
+export const APP_VERSION = '1.5.0';
 
 export interface ChangeGroup {
   /** 分组标题，使用 Conventional Commits 的类型词。 */
@@ -40,6 +40,29 @@ export const CHANGE_GROUP_LABELS: Record<ChangeGroup['kind'], string> = {
 
 /** 最新版本在最上方。 */
 export const CHANGELOG: VersionEntry[] = [
+  {
+    version: '1.5.0',
+    released: '2026-09-27',
+    summary: '全新的应用图标与托盘图标，取代原先的纯色圆点。',
+    groups: [
+      {
+        kind: 'feat',
+        items: [
+          '新应用图标：靛蓝圆角底 + 三条长短不一的任务条（呼应时间线里的甘特条）+ 完成对勾，'
+          + '与默认主题强调色同源；安装包、窗口、任务栏与资源管理器统一使用。',
+          '新托盘图标：针对 Windows 托盘实际只显示 16px 做了简化，去掉对勾以保证三条主条清晰。',
+          '图标改为可复现生成：npm run build:icon 从设计定义渲染多尺寸 ICO 与托盘 PNG。',
+        ],
+      },
+      {
+        kind: 'chore',
+        items: [
+          '图标体积从 286 KB 降到 20 KB，并补齐 24/128 两个此前缺失的尺寸，'
+          + '16/32 额外附带 BMP 版本以提高兼容性。',
+        ],
+      },
+    ],
+  },
   {
     version: '1.4.0',
     released: '2026-09-27',
