@@ -209,11 +209,11 @@ git revert <commit>            # 或撤销某次改动
 | 议题 | 选择 | 理由 |
 |---|---|---|
 | 分支模型 | GitHub Flow 轻量形态，而非 Git Flow | 单人 + 无并行发版需求；`develop`/`release` 分支在本项目只会闲置 |
-| 默认分支名 | 保留 `master` | 仓库已初始化在 `master`。改名收益仅为跟随 GitHub 新默认，却会打断已有引用；如需统一改 `main`，应在有远程之前一次改完 |
+| 默认分支名 | `main` | 改为 GitHub 现行默认。仓库建立时即以 `main` 为默认分支，本地 `master` 在首次推送前改名，因此没有产生任何引用断裂——这正是原文所说「应在有远程之前一次改完」的那个窗口 |
 | 提交规范 | Conventional Commits | 主流、可读、能与变更分组和版本号规则对齐 |
 | 更新记录存放 | 代码内的 `CHANGELOG` 常量 | 「关于」页需要渲染它；放 Markdown 会造成两份记录漂移。若将来要发布到 npm/GitHub Release，再从常量导出即可 |
 | 版本号真源 | `package.json` | 打包工具与 `app.getVersion()` 都读它，不必额外工具 |
-| 自动化发版工具 | 不引入（如 semantic-release / changesets） | 本项目无远程与 CI，引入后仍要人工决定版本号，收益为负 |
-| 质量门禁 | `npm run verify` 一条命令 | 单人项目不需要 CI 编排；一条命令即可复现全部验证 |
+| 自动化发版工具 | 不引入（如 semantic-release / changesets） | 目前无 CI，引入后仍要人工决定版本号，收益为负。若接入 GitHub Actions 可重新评估 |
+| 质量门禁 | `npm run verify` 一条命令 | 一条命令即可复现全部验证；需要时可直接被 CI 调用 |
 
 需要重新评估以上取舍的时机：接入远程仓库与 CI、出现第二位维护者、或开始对外分发安装包。
