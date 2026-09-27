@@ -362,6 +362,8 @@ async function runElectronSuite() {
     },
   });
   const webContents = window.webContents;
+  /** 是否已附加 DevTools 协议（用于确定性地设置视口尺寸）。 */
+  let debuggerAttached = false;
   // 抽屉/弹窗在表单有未保存改动时会走原生 confirm 询问；
   // 无头 Electron 里没有用户点按钮，默认会一直等下去，因此这里自动确认。
   window.webContents.on('will-prevent-unload', (event) => event.preventDefault());
@@ -455,30 +457,47 @@ async function runElectronSuite() {
   }
 
   /**
-   * 调整窗口内容区尺寸并等待渲染进程真正接受新尺寸。
-   * 隐藏窗口偶尔会漏掉一次 resize（窗口内容区已经是目标值，但页面里的
-   * window.innerWidth/Height 仍是旧值），因此这里显式重试若干次，而不是
-   * 单次 setContentSize + 长时间轮询。
+   * 调整视口到指定尺寸并让页面真正按该尺寸布局。   *
+   * 只用 window.setContentSize 不可靠：窗口内容区确实变成了目标值，但隐藏窗口的
+   * 渲染进程有时收不到 resize，window.innerWidth/Height 一直是旧值（重试也无效，
+   * 因为不是时序问题而是事件没送达）。
+   * 因此改为用 DevTools 协议下发 Emulation.setDeviceMetricsOverride —— 它直接改变
+   * 页面的布局视口，与窗口状态无关，测试结果稳定可复现。
    */
   async function setViewport(width, height) {
-    const attempts = 5;
+    if (!debuggerAttached) {
+      try {
+        webContents.debugger.attach('1.3');
+        debuggerAttached = true;
+      } catch (error) {
+        console.log(`[UI 冒烟] 调试器附加失败，回退到窗口缩放：${error instanceof Error ? error.message : error}`);
+      }
+    }
+
+    window.setContentSize(width, height);
+    if (debuggerAttached) {
+      await webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
+        width,
+        height,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+    }
+
     let lastActual = null;
-    for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      window.setContentSize(width, height);
-      for (let poll = 0; poll < 8; poll += 1) {
-        await delay(120);
-        lastActual = await renderer('viewportSize');
-        if (lastActual.width === width && lastActual.height === height) {
-          const shell = await renderer('shellMetrics');
-          check(shell.appShellWidth <= shell.viewportWidth, `${width}x${height} 应用外壳不能横向溢出`);
-          check(shell.mainWidth > 0 && shell.mainHeight > 0, `${width}x${height} 主内容区域必须可用`);
-          return;
-        }
+    for (let poll = 0; poll < 25; poll += 1) {
+      await delay(120);
+      lastActual = await renderer('viewportSize');
+      if (lastActual.width === width && lastActual.height === height) {
+        const shell = await renderer('shellMetrics');
+        check(shell.appShellWidth <= shell.viewportWidth, `${width}x${height} 应用外壳不能横向溢出`);
+        check(shell.mainWidth > 0 && shell.mainHeight > 0, `${width}x${height} 主内容区域必须可用`);
+        return;
       }
     }
     throw new Error(
-      `${width}x${height} 视口在 ${attempts} 次重试后仍未生效：`
-      + `实际 ${JSON.stringify(lastActual)}，窗口内容区 ${JSON.stringify(window.getContentSize())}`,
+      `${width}x${height} 视口未能生效：实际 ${JSON.stringify(lastActual)}，`
+      + `窗口内容区 ${JSON.stringify(window.getContentSize())}，调试器=${debuggerAttached}`,
     );
   }
 
