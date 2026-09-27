@@ -390,9 +390,16 @@ export default function SettingsPage() {
         className="card interactive-card p-4 flex items-center gap-3"
         aria-label={`关于 ProjectTracker，当前版本 v${displayVersion}`}
       >
-        <div className="w-8 h-8 rounded-lg bg-accent-subtler flex items-center justify-center flex-shrink-0">
-          <Info size={14} className="text-accent" aria-hidden="true" />
-        </div>
+        {/* 与应用图标保持一致，而不是用图标库里的近似字形 */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/icon.svg"
+          alt=""
+          width={32}
+          height={32}
+          className="w-8 h-8 rounded-lg flex-shrink-0"
+          aria-hidden="true"
+        />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-primary">ProjectTracker</p>
           <p className="text-xs text-muted mt-0.5">

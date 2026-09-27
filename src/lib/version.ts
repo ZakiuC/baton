@@ -13,7 +13,7 @@
  *   3. 开发中的改动先累积在「未发布」分组，打包交付时再定版本号落地。
  */
 
-export const APP_VERSION = '1.5.0';
+export const APP_VERSION = '1.5.1';
 
 export interface ChangeGroup {
   /** 分组标题，使用 Conventional Commits 的类型词。 */
@@ -40,6 +40,31 @@ export const CHANGE_GROUP_LABELS: Record<ChangeGroup['kind'], string> = {
 
 /** 最新版本在最上方。 */
 export const CHANGELOG: VersionEntry[] = [
+  {
+    version: '1.5.1',
+    released: '2026-09-27',
+    summary: '修复图标只换了窗口、应用内没换的脱节。',
+    groups: [
+      {
+        kind: 'fix',
+        items: [
+          '侧栏标题、设置页版本卡片与「关于」页此前用的是图标库里的近似字形，'
+          + '与新的应用图标并不一致；现在统一直接引用应用图标本身。',
+          '替换仍是 create-next-app 默认图案的站点图标 favicon，'
+          + '改为与窗口图标同源的多尺寸版本（16/24/32/48/64）。',
+        ],
+      },
+      {
+        kind: 'chore',
+        items: [
+          '图标源文件收敛为两个 SVG（src/app/icon.svg 与 icon-tray.svg），'
+          + '安装包图标、托盘图标、站点图标与界面品牌标识全部由 npm run build:icon 从它们生成，'
+          + '不再存在「一处改了、别处没改」的可能。',
+          '删除 create-next-app 遗留且全无引用的 5 个模板 SVG（它们本来还会跟着安装包发布）。',
+        ],
+      },
+    ],
+  },
   {
     version: '1.5.0',
     released: '2026-09-27',

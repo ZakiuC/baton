@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="ProjectTracker">
+  <title>ProjectTracker</title>
+  <!--
+    托盘/小尺寸专用版本。Windows 托盘实际只显示 16px，对勾在那个尺寸只剩几个
+    像素，反而干扰三条主条，因此这里去掉对勾并把任务条加粗、缩小留白。
+    由 npm run build:icon 从本文件生成 electron/tray.png。
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6B77E0"/>
+      <stop offset="1" stop-color="#343C96"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="256" height="256" rx="52" ry="52" fill="url(#bg)"/>
+  <g>
+    <rect x="42" y="68" width="172" height="34" rx="17" fill="#FFFFFF" opacity="0.55"/>
+    <rect x="42" y="111" width="126" height="34" rx="17" fill="#FFFFFF" opacity="0.8"/>
+    <rect x="42" y="154" width="152" height="34" rx="17" fill="#FFFFFF"/>
+  </g>
+</svg>

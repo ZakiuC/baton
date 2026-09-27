@@ -12,7 +12,6 @@ import {
   Settings,
   ChevronsLeft,
   ChevronsRight,
-  FolderKanban,
   RefreshCw,
 } from 'lucide-react';
 import { Project } from '@/lib/queries/projects';
@@ -117,13 +116,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 className="flex items-center gap-2.5 px-3.5 py-4 flex-shrink-0"
                 style={{ borderBottom: '1px solid var(--t-border)' }}
               >
-                <div
-                  className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                  style={{ background: 'var(--t-accent)', color: 'var(--t-accent-foreground)' }}
+                {/* 品牌标识直接用应用图标本身（src/app/icon.svg），
+                    而不是另一个近似的图标库字形，避免与窗口/安装包图标不一致。 */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/icon.svg"
+                  alt=""
+                  width={28}
+                  height={28}
+                  className="w-7 h-7 rounded-lg flex-shrink-0"
                   aria-hidden="true"
-                >
-                  <FolderKanban size={14} />
-                </div>
+                />
                 {!collapsed && (
                   <span className="text-sm font-bold text-primary tracking-tight truncate">
                     ProjectTracker

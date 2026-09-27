@@ -61,11 +61,19 @@ if (directoryMode) {
     path.join(unpackedRoot, 'ProjectTracker.exe'),
     path.join(unpackedRoot, 'resources', 'standalone', 'server.js'),
     path.join(unpackedRoot, 'resources', 'standalone', '.next', 'static'),
-    path.join(unpackedRoot, 'resources', 'standalone', 'public'),
     path.join(unpackedRoot, 'resources', 'standalone', 'node_modules', 'next', 'package.json'),
   ];
   for (const requiredPath of requiredFiles) {
     if (!fs.existsSync(requiredPath)) throw new Error(`打包产物缺失：${requiredPath}`);
+  }
+
+  // public/ 是可选的：本项目没有需要从 public 提供的静态文件时它会是空的，
+  // 而 electron-builder 会丢弃空目录，属正常情况，不算产物缺失。
+  const publicTarget = path.join(unpackedRoot, 'resources', 'standalone', 'public');
+  const hasPublicAssets = fs.existsSync(path.join(projectRoot, 'public'))
+    && fs.readdirSync(path.join(projectRoot, 'public')).some((name) => name !== '.gitkeep');
+  if (hasPublicAssets && !fs.existsSync(publicTarget)) {
+    throw new Error(`源仓库 public/ 有静态文件，但产物中缺少：${publicTarget}`);
   }
 
   const runtimeRoot = path.join(unpackedRoot, 'resources', 'standalone');

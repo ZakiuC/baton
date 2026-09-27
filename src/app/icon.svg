@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="ProjectTracker">
+  <title>ProjectTracker</title>
+  <!--
+    ProjectTracker 的应用图标。
+    三条长短不一的任务条呼应时间线里的甘特条，右下对勾表示推进/完成。
+    这是图标的唯一真源：electron/icon.ico、electron/tray.png 与 favicon.ico
+    都由 npm run build:icon 从本文件生成，界面内的品牌标识也直接引用它，
+    因此不会再出现「窗口图标换了、界面里没换」的脱节。
+    注意：改这里之后要重跑 npm run build:icon。
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6B77E0"/>
+      <stop offset="1" stop-color="#343C96"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="256" height="256" rx="56" ry="56" fill="url(#bg)"/>
+  <g>
+    <rect x="48" y="72" width="92" height="30" rx="15" fill="#FFFFFF" opacity="0.5"/>
+    <rect x="48" y="113" width="126" height="30" rx="15" fill="#FFFFFF" opacity="0.75"/>
+    <rect x="48" y="154" width="76" height="30" rx="15" fill="#FFFFFF"/>
+  </g>
+  <circle cx="188" cy="176" r="34" fill="#4A55C4"/>
+  <path d="M172 176 l12 12 l22 -25" fill="none" stroke="#FFFFFF" stroke-width="11"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -454,21 +454,32 @@ async function runElectronSuite() {
     return payload;
   }
 
+  /**
+   * 调整窗口内容区尺寸并等待渲染进程真正接受新尺寸。
+   * 隐藏窗口偶尔会漏掉一次 resize（窗口内容区已经是目标值，但页面里的
+   * window.innerWidth/Height 仍是旧值），因此这里显式重试若干次，而不是
+   * 单次 setContentSize + 长时间轮询。
+   */
   async function setViewport(width, height) {
-    window.setContentSize(width, height);
-    try {
-      await waitFor('viewportIs', [width, height], `${width}x${height} 视口生效`);
-    } catch (error) {
-      const actual = await renderer('viewportSize');
-      throw new Error(
-        `${error instanceof Error ? error.message : String(error)}`
-        + `；请求 ${width}x${height}，实际 ${JSON.stringify(actual)}`
-        + `，窗口内容区 ${JSON.stringify(window.getContentSize())}，是否最大化 ${window.isMaximized()}`,
-      );
+    const attempts = 5;
+    let lastActual = null;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      window.setContentSize(width, height);
+      for (let poll = 0; poll < 8; poll += 1) {
+        await delay(120);
+        lastActual = await renderer('viewportSize');
+        if (lastActual.width === width && lastActual.height === height) {
+          const shell = await renderer('shellMetrics');
+          check(shell.appShellWidth <= shell.viewportWidth, `${width}x${height} 应用外壳不能横向溢出`);
+          check(shell.mainWidth > 0 && shell.mainHeight > 0, `${width}x${height} 主内容区域必须可用`);
+          return;
+        }
+      }
     }
-    const shell = await renderer('shellMetrics');
-    check(shell.appShellWidth <= shell.viewportWidth, `${width}x${height} 应用外壳不能横向溢出`);
-    check(shell.mainWidth > 0 && shell.mainHeight > 0, `${width}x${height} 主内容区域必须可用`);
+    throw new Error(
+      `${width}x${height} 视口在 ${attempts} 次重试后仍未生效：`
+      + `实际 ${JSON.stringify(lastActual)}，窗口内容区 ${JSON.stringify(window.getContentSize())}`,
+    );
   }
 
   async function verifyDialogFocusCycle(kind) {

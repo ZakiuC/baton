@@ -4,7 +4,6 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   BadgeCheck,
-  Boxes,
   History,
   Info,
   Layers,
@@ -39,13 +38,16 @@ export default function AboutPage() {
       {/* 概要 */}
       <section className="card p-5" aria-labelledby="about-title">
         <div className="flex items-start gap-4">
-          <div
-            className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'var(--t-accent)', color: 'var(--t-accent-foreground)' }}
+          {/* 「关于」页展示的就是应用图标本身，而不是图标库里的近似字形。 */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/icon.svg"
+            alt=""
+            width={44}
+            height={44}
+            className="w-11 h-11 rounded-xl flex-shrink-0"
             aria-hidden="true"
-          >
-            <Boxes size={20} />
-          </div>
+          />
           <div className="min-w-0">
             <h2 id="about-title" className="text-base font-semibold text-primary tracking-tight">
               ProjectTracker
