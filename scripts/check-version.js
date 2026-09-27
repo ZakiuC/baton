@@ -61,6 +61,36 @@ if (changelogVersions.length === 0) {
   }
 }
 
+// 交付锚点：能取到 git 信息时，要求存在与当前版本对应的 tag（如 v1.3.0）。
+// 这正是「版本要提交进仓库」这条规则的自动检查——升了版本却没打 tag 会在这里暴露。
+// 没有 git 或没有 .git 时跳过，避免影响从压缩包解出的源码。
+function readGitTag() {
+  try {
+    const { execFileSync } = require('node:child_process');
+    const output = execFileSync('git', ['tag', '--list'], {
+      cwd: projectRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return output.split('\n').map((line) => line.trim()).filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+const tags = readGitTag();
+if (tags === null) {
+  console.log('[版本检查] 未检测到 git，跳过 tag 检查');
+} else {
+  const expectedTag = `v${packageJson.version}`;
+  if (!tags.includes(expectedTag)) {
+    problems.push(
+      `缺少版本 tag ${expectedTag}；发版流程要求「升版本号 + 提交 + 打 tag」，`
+      + `执行：git tag -a ${expectedTag} -m "ProjectTracker ${packageJson.version}"`,
+    );
+  }
+}
+
 if (problems.length > 0) {
   console.error('[版本检查] 未通过：');
   for (const problem of problems) console.error(`  - ${problem}`);
@@ -68,6 +98,7 @@ if (problems.length > 0) {
 } else {
   console.log(
     `[版本检查] 通过：package.json 与 version.ts 均为 ${packageJson.version}，`
-    + `CHANGELOG 共 ${changelogVersions.length} 条且顺序正确`,
+    + `CHANGELOG 共 ${changelogVersions.length} 条且顺序正确`
+    + (tags === null ? '' : `，已存在 tag v${packageJson.version}`),
   );
 }
