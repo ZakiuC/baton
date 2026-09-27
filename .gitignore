@@ -12,6 +12,7 @@
 
 # testing
 /coverage
+/.dev-data/
 
 # next.js
 /.next/
@@ -19,6 +20,13 @@
 
 # production
 /build
+/release/
+/theme_*/
+
+# 本地数据库、原子写临时文件与可恢复备份不得进入源码或构建上下文
+**/tracker.db*
+/src/data/*.db*
+/data/*.db*
 
 # misc
 .DS_Store

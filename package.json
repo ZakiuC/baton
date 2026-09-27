@@ -1,26 +1,95 @@
 {
   "name": "project-tracker",
-  "version": "0.1.0",
+  "version": "1.3.0",
   "private": true,
+  "description": "本地多项目并行管理工具",
+  "author": "ProjectTracker",
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
+    "dev:electron": "cross-env APP_DATA_DIR=.dev-data concurrently -k \"next dev\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "next build",
+    "postbuild": "node scripts/prepare-standalone.js",
     "start": "next start",
-    "lint": "eslint"
+    "build:electron": "node scripts/build-electron.js",
+    "build:electron:dir": "node scripts/build-electron.js --dir",
+    "typecheck": "tsc --noEmit --incremental false --pretty false",
+    "test:api": "npm run build && node scripts/smoke-api.js",
+    "test:api:built": "node scripts/smoke-api.js",
+    "test:ui": "npm run build && node scripts/smoke-ui.js",
+    "test:ui:built": "node scripts/smoke-ui.js",
+    "lint": "eslint",
+    "check:theme": "node scripts/check-theme-tokens.js",
+    "check:version": "node scripts/check-version.js",
+    "verify:static": "npm run typecheck && npm run lint && npm run check:theme && npm run check:version",
+    "verify": "npm run verify:static && npm run build && npm run test:api:built && npm run test:ui:built"
+  },
+  "build": {
+    "appId": "com.projecttracker.app",
+    "productName": "ProjectTracker",
+    "directories": {
+      "output": "release"
+    },
+    "npmRebuild": false,
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".next",
+        "to": ".",
+        "filter": [
+          "standalone/**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "electron/icon.ico",
+      "target": [
+        { "target": "portable", "arch": ["x64"] },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "ProjectTracker"
+    }
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "auto-launch": "^5.0.6",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.25.0",
+    "nanoid": "^6.0.0",
     "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "sql.js": "^1.14.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sql.js": "^1.4.11",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.0.10"
   }
 }
