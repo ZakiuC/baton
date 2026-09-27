@@ -94,27 +94,41 @@ check:version 已纳入 verify:static，并在 UI 冒烟中加入重复项断言
 
 ## 4. 分支策略
 
-本仓库是**单人维护、纯本地、无远程**的私有项目，因此采用 [GitHub Flow](https://docs.github.com/get-started/using-github/github-flow) 的轻量形态：
+本仓库是**单人维护**的项目，已托管在 GitHub（`ZakiuC/baton`，公开仓库），
+因此采用 [GitHub Flow](https://docs.github.com/get-started/using-github/github-flow) 的轻量形态：
 
 | 分支 | 用途 |
 |---|---|
-| `master` | 默认分支，始终可交付。每个提交都应通过 `npm run verify` |
-| `feat/<主题>`、`fix/<主题>` | 需要多次提交、或中途可能放弃的改动。做完合回 `master` 并删除 |
+| `main` | 默认分支，始终可交付。每个提交都应通过 `npm run verify` |
+| `feat/<主题>`、`fix/<主题>` | 需要多次提交、或中途可能放弃的改动。做完合回 `main` 并删除 |
 
 约定：
 
-- **小改动直接提交到 `master`**（单人项目里为每个琐碎改动开分支只会增加合并成本）。
+- **小改动直接提交到 `main`**（单人项目里为每个琐碎改动开分支只会增加合并成本）。
 - **大改动开短生命周期分支**，合并方式用 `--no-ff` 保留一条合并记录，便于整体回退。
 - 分支名小写、用连字符分隔，例如 `feat/about-page`。
 - 不保留长期分支（`develop`、`release`），也不做 Git Flow 的 `hotfix`——本项目没有并行发版需求，引入它们只会带来闲置分支。
 
-需要远程协作时（例如换机器、多人加入），执行：
+远程与认证：
+
+| 项目 | 配置 |
+|---|---|
+| 远程 | `origin` → `https://github.com/ZakiuC/baton.git` |
+| 默认分支 | `main`（仓库建立时即为 `main`，本地曾用 `master`，推送前已改名） |
+| 凭据 | `credential.helper=manager`（Git Credential Manager，首次推送后自动记住） |
+
+日常同步：
 
 ```bash
-git remote add origin <url>
-git push -u origin master
-git push --tags
+git push origin main        # 推送提交
+git push origin --tags      # 推送新 tag（发版后必做，否则远端看不到该版本）
+git fetch origin            # 换机器或协作前先取远端
 ```
+
+> **推送注意**：提交历史里带有作者邮箱。本仓库为公开仓库，若希望隐藏邮箱，
+> 可在 GitHub 设置里启用 *Keep my email addresses private*，并用
+> `<id>+<用户名>@users.noreply.github.com` 作为 `user.email`（只对之后的提交生效；
+> 改写已有历史需 `git rebase` 后强推，公开仓库上需谨慎）。
 
 ## 5. 发版流程
 
