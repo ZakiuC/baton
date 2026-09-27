@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, CalendarDays, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, CalendarDays, Infinity as InfinityIcon, RefreshCw } from 'lucide-react';
 import {
   startOfWeek, endOfWeek, addWeeks, subWeeks,
   eachDayOfInterval, format, parseISO, isToday,
@@ -9,7 +9,7 @@ import {
 import { zhCN } from 'date-fns/locale';
 import { Task } from '@/lib/queries/tasks';
 import { Project } from '@/lib/queries/projects';
-import { STAGE_CONFIG } from '@/lib/utils';
+import { PRIORITY_CONFIG, STAGE_CONFIG, isLongTermTask } from '@/lib/utils';
 import TaskDetail from '@/components/forms/TaskDetail';
 
 export default function TimelinePage() {
@@ -82,6 +82,28 @@ export default function TimelinePage() {
     }
     return grouped;
   }, [tasks]);
+
+  /** 长期任务：无截止日期且未完成/未归档，按项目分组。 */
+  const longTermByProject = useMemo(() => {
+    const grouped = new Map<string, Task[]>();
+    for (const task of tasks) {
+      if (!isLongTermTask(task)) continue;
+      const current = grouped.get(task.project_id);
+      if (current) current.push(task);
+      else grouped.set(task.project_id, [task]);
+    }
+    for (const list of grouped.values()) {
+      list.sort((a, b) => {
+        const order = ['urgent', 'high', 'medium', 'low'];
+        return order.indexOf(a.priority) - order.indexOf(b.priority);
+      });
+    }
+    return grouped;
+  }, [tasks]);
+  const longTermCount = useMemo(
+    () => Array.from(longTermByProject.values()).reduce((sum, list) => sum + list.length, 0),
+    [longTermByProject],
+  );
 
   if (loading) {
     return (
@@ -276,6 +298,86 @@ export default function TimelinePage() {
           )}
         </div>
         )}
+
+        {/* 长期任务：没有截止日期，因此不会出现在上面的周视图里，单独列出避免遗漏 */}
+        <section
+          className="mt-5 card overflow-hidden"
+          aria-labelledby="long-term-title"
+        >
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+            <div className="w-7 h-7 rounded-lg bg-accent-subtler flex items-center justify-center flex-shrink-0">
+              <InfinityIcon size={14} className="text-accent" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 id="long-term-title" className="text-sm font-semibold text-primary">长期任务</h2>
+              <p className="text-xs text-muted mt-0.5">
+                没有截止日期、仍未完成的任务。它们不会出现在按日期铺排的周视图里。
+              </p>
+            </div>
+            <span className="badge text-muted bg-muted-subtle">{longTermCount} 项</span>
+          </div>
+
+          <div className="p-4">
+            {longTermCount === 0 ? (
+              <p className="py-4 text-center text-xs text-muted">
+                当前没有长期任务——所有未完成的任务都已设定截止日期。
+              </p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {activeProjects.map((project) => {
+                  const projectTasks = longTermByProject.get(project.id) || [];
+                  if (projectTasks.length === 0) return null;
+                  return (
+                    <div key={project.id} className="rounded-lg border border-border bg-bg-subtler p-3 self-start">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span
+                          className="w-2 h-2 rounded-sm flex-shrink-0"
+                          style={{ backgroundColor: project.color }}
+                          aria-hidden="true"
+                        />
+                        <h3 className="text-xs font-semibold text-primary truncate">{project.name}</h3>
+                        <span className="ml-auto text-[10px] font-mono text-muted flex-shrink-0">
+                          {projectTasks.length}
+                        </span>
+                      </div>
+                      <ul className="space-y-1">
+                        {projectTasks.map((task) => {
+                          const stageConfig = STAGE_CONFIG[task.stage];
+                          const priorityConfig = PRIORITY_CONFIG[task.priority];
+                          return (
+                            <li key={task.id}>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedTaskId(task.id)}
+                                className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-[background-color] hover:bg-bg-hover"
+                                aria-label={`打开任务：${task.title}`}
+                              >
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: stageConfig?.color }}
+                                  aria-hidden="true"
+                                />
+                                <span className="min-w-0 flex-1 truncate text-xs text-primary">
+                                  {task.title}
+                                </span>
+                                <span className={`badge flex-shrink-0 ${task.priority === 'urgent' ? 'text-danger bg-danger-light' : 'text-muted bg-muted-subtle'}`}>
+                                  {priorityConfig?.label || task.priority}
+                                </span>
+                                <span className="text-[10px] text-muted flex-shrink-0 hidden sm:inline">
+                                  {stageConfig?.label}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
       </div>
 
       {selectedTaskId && (

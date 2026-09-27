@@ -1,6 +1,6 @@
 {
   "name": "project-tracker",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "本地多项目并行管理工具",
   "author": "ProjectTracker",

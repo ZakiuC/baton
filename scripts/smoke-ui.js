@@ -362,6 +362,14 @@ async function runElectronSuite() {
     },
   });
   const webContents = window.webContents;
+  // 抽屉/弹窗在表单有未保存改动时会走原生 confirm 询问；
+  // 无头 Electron 里没有用户点按钮，默认会一直等下去，因此这里自动确认。
+  window.webContents.on('will-prevent-unload', (event) => event.preventDefault());
+  window.webContents.on('did-finish-load', () => {
+    window.webContents.executeJavaScript(
+      `window.confirm = () => true;`, true,
+    ).catch(() => { /* 页面切换期间可能失败，忽略 */ });
+  });
   webContents.on('console-message', (details) => {
     const level = details.level;
     const message = details.message;
@@ -396,6 +404,10 @@ async function runElectronSuite() {
   }
 
   async function click(spec) {
+    // 长页面/内部滚动容器里目标可能在视口之外，坐标点击会落空：
+    // 先滚动进视口并等待滚动稳定，再取坐标。
+    await renderer('scrollIntoView', spec);
+    await delay(250);
     await renderer('focus', spec);
     const rect = await renderer('elementRect', spec);
     check(rect && rect.width > 0 && rect.height > 0, `目标元素必须可点击：${JSON.stringify(spec)}`);
@@ -444,7 +456,16 @@ async function runElectronSuite() {
 
   async function setViewport(width, height) {
     window.setContentSize(width, height);
-    await waitFor('viewportIs', [width, height], `${width}x${height} 视口生效`);
+    try {
+      await waitFor('viewportIs', [width, height], `${width}x${height} 视口生效`);
+    } catch (error) {
+      const actual = await renderer('viewportSize');
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)}`
+        + `；请求 ${width}x${height}，实际 ${JSON.stringify(actual)}`
+        + `，窗口内容区 ${JSON.stringify(window.getContentSize())}，是否最大化 ${window.isMaximized()}`,
+      );
+    }
     const shell = await renderer('shellMetrics');
     check(shell.appShellWidth <= shell.viewportWidth, `${width}x${height} 应用外壳不能横向溢出`);
     check(shell.mainWidth > 0 && shell.mainHeight > 0, `${width}x${height} 主内容区域必须可用`);
@@ -551,11 +572,27 @@ async function runElectronSuite() {
             return element.value === value;
           },
           text: (spec) => normalize(find(spec)?.innerText || find(spec)?.textContent),
+          scrollIntoView: (spec) => {
+            const element = find(spec);
+            if (!element) return false;
+            element.scrollIntoView({ block: 'center', inline: 'nearest' });
+            return true;
+          },
           pathIs: (pathname) => location.pathname === pathname,
+          viewportSize: () => ({ width: window.innerWidth, height: window.innerHeight }),
+          scrollIntoView: (spec) => {
+            const element = find(spec);
+            if (!element) return false;
+            // 应用用的是内部滚动容器（main 的 overflow-auto）而不是页面滚动，
+            // scrollIntoView 会滚动最近的祖先容器。
+            element.scrollIntoView({ block: 'center', inline: 'center' });
+            return true;
+          },
           elementRect: (spec) => {
             const element = find(spec);
             if (!element) return null;
-            element.scrollIntoView({ block: 'center', inline: 'center' });
+            // 先确保在视口内；坐标由调用方在滚动稳定后再取，
+            // 避免平滑滚动过程中读到过期位置导致点击落空。
             const rect = element.getBoundingClientRect();
             return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
           },
@@ -745,6 +782,21 @@ async function runElectronSuite() {
     const taskName = `UI 冒烟任务 ${randomUUID().slice(0, 8)}`;
     const updatedTaskName = `${taskName} 已编辑`;
     const blockerReason = '等待 UI 冒烟依赖确认';
+    // 用于验证「长期任务 ↔ 有截止日期」的相互转换。
+    // 必须是本周内的日期，否则任务虽设了日期也不会出现在当前显示的周视图里。
+    const defaultDueDate = (() => {
+      const today = new Date();
+      const weekday = (today.getDay() + 6) % 7; // 0 = 周一
+      const target = new Date(today);
+      // 取本周周四（必要时回退到周日），保证落在这七天区间内
+      target.setDate(today.getDate() - weekday + 3);
+      if (target < new Date(today.getFullYear(), today.getMonth(), today.getDate())) {
+        target.setDate(today.getDate() + (6 - weekday));
+      }
+      const month = String(target.getMonth() + 1).padStart(2, '0');
+      const day = String(target.getDate()).padStart(2, '0');
+      return `${target.getFullYear()}-${month}-${day}`;
+    })();
     await type({ selector: '#project-quick-task' }, taskName);
     key('Enter');
     await waitFor('exists', [{ selector: 'button', aria: `打开任务：${taskName}`, exact: true }], '快速创建任务完成');
@@ -957,6 +1009,128 @@ async function runElectronSuite() {
     await click({ selector: 'a', text: '看板', exact: true });
     await waitFor('pathIs', ['/board'], '进入看板');
     await waitFor('exists', [{ selector: 'h1', text: '看板', exact: true }], '看板加载完成');
+
+    // 长期任务面板：没有截止日期的未完成任务必须能从时间线进入，并能一键设为长期任务。
+    // 面板在时间线的内部滚动容器下方，需要一点可见高度才容易操作；
+    // 但窗口内容高度不能超过屏幕可用高度（标题栏 + 任务栏都会被扣掉），否则
+    // setContentSize 不会真正生效，后续视口断言会超时。这里留足余量。
+    await setViewport(1400, 960);
+    await window.loadURL(`${baseUrl}/timeline`);
+    await delay(600);
+    await injectRendererHelper();
+    await waitFor('pathIs', ['/timeline'], '进入时间线');
+    await waitFor('exists', [{ selector: '#long-term-title' }], '长期任务面板出现');
+    const longTermPanel = await webContents.executeJavaScript(
+      `(() => {
+        const section = document.querySelector('section[aria-labelledby="long-term-title"]');
+        if (!section) return null;
+        const buttons = Array.from(section.querySelectorAll('li button'));
+        return {
+          count: buttons.length,
+          badge: (section.querySelector('.badge')?.textContent || '').trim(),
+          titles: buttons.map((b) => (b.textContent || '').trim()),
+        };
+      })()`,
+      true,
+    );
+    check(longTermPanel !== null, '时间线必须渲染长期任务面板');
+    equal(longTermPanel.count, 1, `刚创建的无日期任务必须出现在长期任务面板（实际 ${JSON.stringify(longTermPanel.titles)}）`);
+    check(longTermPanel.titles.some((t) => t.includes(taskName)), '长期任务面板必须包含该任务');
+
+    // 打开详情：无日期时应提示是长期任务。
+    // 该面板位于时间线内部滚动容器下方，坐标点击容易落空；直接按结构定位按钮并派发 DOM click。
+    // （冒烟里长期任务面板只会包含刚创建的那个任务，因此结构选择器是确定的。）
+    equal(
+      await renderer('count', { selector: 'section[aria-labelledby="long-term-title"] li button' }),
+      1,
+      '长期任务面板应恰好包含一个任务按钮',
+    );
+    check(
+      await renderer('domClick', { selector: 'section[aria-labelledby="long-term-title"] li button' }),
+      '长期任务面板中的任务应响应点击',
+    );
+    await waitFor('exists', [{ selector: '#detail-due-date' }], '从长期任务面板打开任务详情');
+    equal(await renderer('value', { selector: '#detail-due-date' }), '', '长期任务的截止日期应为空');
+    check(
+      await renderer('exists', { selector: '[role="dialog"]', text: '当前是长期任务' }),
+      '无截止日期时详情应说明这是长期任务',
+    );
+    // 只读观察后关闭：此时表单与任务一致，不会触发「未保存」确认。
+    // 关闭按钮是右上角的小图标，坐标点击在无头环境不稳定，用 DOM click。
+    check(
+      await renderer('domClick', { selector: '[role="dialog"] button[aria-label="关闭抽屉"]' }),
+      '关闭抽屉按钮应响应点击',
+    );
+    await waitFor('absent', [{ selector: '[role="dialog"]' }], '详情抽屉关闭');
+
+    // 通过接口设定截止日期（等价于别的入口设置的日期）：
+    // 任务必须移出长期任务面板，并出现在周视图对应日期上。
+    await api(`/api/tasks/${task.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ due_date: defaultDueDate }),
+    });
+    equal((await api(`/api/tasks/${task.id}`)).due_date, defaultDueDate, '截止日期必须写入');
+    // 页面靠 window 上的自定义事件刷新；这里在渲染进程里派发，等价于界面自身触发的刷新。
+    await webContents.executeJavaScript(
+      `window.dispatchEvent(new CustomEvent('task-updated')); true`, true,
+    );
+    await delay(600);
+    const afterSetDate = await webContents.executeJavaScript(
+      `(() => {
+        const section = document.querySelector('section[aria-labelledby="long-term-title"]');
+        const buttons = Array.from(section.querySelectorAll('li button'));
+        const inGrid = Array.from(document.querySelectorAll('main button')).some((b) => {
+          const inPanel = b.closest('section[aria-labelledby="long-term-title"]') !== null;
+          return !inPanel && (b.textContent || '').includes(${JSON.stringify(taskName)});
+        });
+        return { longTermTitles: buttons.map((b) => (b.textContent || '').trim()), inGrid };
+      })()`,
+      true,
+    );
+    check(
+      !afterSetDate.longTermTitles.some((t) => t.includes(taskName)),
+      `设定了截止日期后必须移出长期任务面板（实际 ${JSON.stringify(afterSetDate.longTermTitles)}）`,
+    );
+    check(afterSetDate.inGrid, '设定了截止日期的任务必须出现在周视图里');
+
+    // 抽屉里的「设为长期任务」：清空日期后任务回到长期任务面板。
+    // 周视图里的任务按钮没有 aria-label，只有 title=`${标题} · ${阶段}`，因此按属性定位。
+    check(
+      await renderer('domClick', { selector: `button[title^="${taskName}"]` }),
+      '周视图中的任务应响应点击',
+    );
+    await waitFor('exists', [{ selector: '#detail-due-date' }], '从周视图打开任务详情');
+    equal(await renderer('value', { selector: '#detail-due-date' }), defaultDueDate, '详情应载入已设的截止日期');
+    // 「设为长期任务」是输入框下方的小号文字按钮，坐标点击在无头环境下不可靠，用 DOM click。
+    await waitFor('exists', [{ selector: '[role="dialog"] button', text: '设为长期任务', exact: true }], '「设为长期任务」按钮出现');
+    check(
+      await renderer('domClick', { selector: '[role="dialog"] button', text: '设为长期任务', exact: true }),
+      '「设为长期任务」按钮应响应点击',
+    );
+    await waitFor('valueIs', [{ selector: '#detail-due-date' }, ''], '截止日期已清空');
+    equal((await api(`/api/tasks/${task.id}`)).due_date, null, '「设为长期任务」必须把 due_date 置空');
+    // 该操作已提交，表单与任务一致，可正常关闭
+    check(
+      await renderer('domClick', { selector: '[role="dialog"] button[aria-label="关闭抽屉"]' }),
+      '关闭抽屉按钮应响应点击',
+    );
+    await waitFor('absent', [{ selector: '[role="dialog"]' }], '详情抽屉关闭');
+    await delay(600);
+    // 恢复到常规视口，供后面的布局断言使用
+    await setViewport(1400, 900);
+    const afterClear = await webContents.executeJavaScript(
+      `(() => {
+        const section = document.querySelector('section[aria-labelledby="long-term-title"]');
+        return Array.from(section.querySelectorAll('li button')).map((b) => (b.textContent || '').trim());
+      })()`,
+      true,
+    );
+    check(
+      afterClear.some((t) => t.includes(taskName)),
+      '「设为长期任务」后必须回到长期任务面板',
+    );
+    equal((await api(`/api/tasks/${task.id}`)).due_date, null, '「设为长期任务」必须把 due_date 置空');
 
     // 「关于」页：版本号必须与实际交付的版本一致，更新记录必须渲染出来。
     // 直接导航而不是点设置页的入口，避免 aria-label 里带版本号导致文案匹配变脆。

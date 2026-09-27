@@ -120,6 +120,27 @@ function TaskDetailContent({ taskId, onClose }: TaskDetailProps) {
     }
   };
 
+  /** 一键把任务设为长期任务（清空截止日期）。 */
+  const handleClearDueDate = async () => {
+    if (!task || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      const savedTask = await apiRequest<Task>(`/api/tasks/${task.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ due_date: null }),
+      });
+      applyTask(savedTask);
+      window.dispatchEvent(new CustomEvent('task-updated'));
+      notify('已设为长期任务（无截止日期）', 'success');
+    } catch (clearError: unknown) {
+      setError(getErrorMessage(clearError, '清空截止日期失败，请重试'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleArchive = async () => {
     if (!task) return;
     setArchiving(true);
@@ -294,6 +315,21 @@ function TaskDetailContent({ taskId, onClose }: TaskDetailProps) {
             onChange={(event) => setDueDate(event.target.value)}
             className="field-control px-3 text-sm"
           />
+          <div className="flex items-center justify-between gap-2 mt-1.5">
+            <p className="text-[11px] text-muted">
+              {dueDate ? '到时会出现在时间线的对应日期' : '当前是长期任务，不设截止日期'}
+            </p>
+            {dueDate ? (
+              <button
+                type="button"
+                onClick={handleClearDueDate}
+                disabled={saving}
+                className="text-[11px] font-medium text-accent hover:underline disabled:opacity-40"
+              >
+                设为长期任务
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="text-xs text-muted space-y-1 pt-1 border-t border-border">

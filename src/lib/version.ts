@@ -13,7 +13,7 @@
  *   3. 开发中的改动先累积在「未发布」分组，打包交付时再定版本号落地。
  */
 
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.4.0';
 
 export interface ChangeGroup {
   /** 分组标题，使用 Conventional Commits 的类型词。 */
@@ -40,6 +40,35 @@ export const CHANGE_GROUP_LABELS: Record<ChangeGroup['kind'], string> = {
 
 /** 最新版本在最上方。 */
 export const CHANGELOG: VersionEntry[] = [
+  {
+    version: '1.4.0',
+    released: '2026-09-27',
+    summary: '新增「长期任务」视图：没有截止日期的任务不再从视野里消失。',
+    groups: [
+      {
+        kind: 'feat',
+        items: [
+          '时间线新增「长期任务」面板：按项目列出所有没有截止日期、且尚未完成的任务。'
+          + '这类任务不会出现在按日期铺排的周视图里，此前创建后基本就看不到。',
+          '任务详情新增「设为长期任务」一键清空截止日期；没有日期时会在输入框下方提示当前是长期任务。',
+          '长期任务按优先级排序（紧急 → 高 → 中 → 低）并显示所处阶段，便于判断先推进哪个。',
+        ],
+      },
+      {
+        kind: 'fix',
+        items: [
+          '修复 UI 冒烟在缺少同步 IPC handler 时会无限挂起的问题：新增看门狗，超时显式失败而不是永久等待。',
+        ],
+      },
+      {
+        kind: 'chore',
+        items: [
+          'UI 冒烟补齐长期任务断言：面板内容、设日期后移出面板并进入周视图、一键设为长期任务，'
+          + '并修正键盘输入与坐标点击在无头 Electron 下的不稳定问题。',
+        ],
+      },
+    ],
+  },
   {
     version: '1.3.0',
     released: '2026-09-27',

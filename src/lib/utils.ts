@@ -23,6 +23,15 @@ export const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
   done: { label: '已完成', color: '#10B981' },
 };
 
+/**
+ * 长期任务：没有截止日期、且尚未完成或归档的任务。
+ * 它们不会出现在时间线（按截止日期铺排）里，因此需要单独呈现。
+ */
+export function isLongTermTask(task: { due_date: string | null; stage: string }): boolean {
+  const hasDueDate = Boolean(task.due_date && task.due_date.trim());
+  return !hasDueDate && task.stage !== 'done' && task.stage !== 'archived';
+}
+
 // 动作标签
 export const ACTION_LABELS: Record<string, string> = {
   'stage_changed': '状态变更',
