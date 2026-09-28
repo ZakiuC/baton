@@ -3,12 +3,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   DndContext,
-  DragOverlay,
   PointerSensor,
   useSensor,
   useSensors,
   closestCorners,
-  DragStartEvent,
   DragEndEvent,
   KeyboardSensor,
   Announcements,
@@ -18,7 +16,6 @@ import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { Task } from '@/lib/queries/tasks';
 import { Project } from '@/lib/queries/projects';
 import KanbanColumn from '@/components/board/KanbanColumn';
-import TaskCard from '@/components/shared/TaskCard';
 import TaskDetail from '@/components/forms/TaskDetail';
 import BlockerForm from '@/components/forms/BlockerForm';
 import { useFeedback } from '@/components/shared/Feedback';
@@ -41,7 +38,6 @@ export default function BoardPage() {
   const [loading, setLoading] = useState(true);
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set());
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [blockerTask, setBlockerTask] = useState<Task | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { notify } = useFeedback();
@@ -65,8 +61,11 @@ export default function BoardPage() {
     };
   }, [tasks]);
 
+  // 整张卡片都是拖拽区，因此必须把「点击打开」和「长按拖动」分开：
+  // 按住 250ms 才进入拖拽，短按交给 onClick 打开详情。
+  // tolerance 给手指/鼠标一点抖动余量，避免轻微移动就取消长按。
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -112,12 +111,7 @@ export default function BoardPage() {
 
   const getTasksByStage = (stage: string) => filteredTasks.filter((t) => t.stage === stage);
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveTask(tasks.find((t) => t.id === event.active.id) || null);
-  };
-
   const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveTask(null);
     const { active, over } = event;
     if (!over) return;
     const taskId = active.id as string;
@@ -245,9 +239,7 @@ export default function BoardPage() {
             sensors={sensors}
             collisionDetection={closestCorners}
             accessibility={{ announcements, screenReaderInstructions }}
-            onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
-            onDragCancel={() => setActiveTask(null)}
           >
             <div className="grid grid-cols-[repeat(4,minmax(260px,1fr))] gap-3 h-full min-h-[400px] min-w-[1080px]">
               {STAGES.map((stage) => (
@@ -259,9 +251,13 @@ export default function BoardPage() {
                 />
               ))}
             </div>
-            <DragOverlay>
-              {activeTask && <TaskCard task={activeTask} onClick={() => {}} />}
-            </DragOverlay>
+            {/*
+              刻意不使用 DragOverlay：它会把卡片复制到一个独立的定位层里，
+              坐标依赖 dnd-kit 自己那套滚动补偿，而这个看板是横向可滚动的，
+              于是卡片位置会偏离鼠标（用户报的偏移 bug）。
+              去掉之后由 useSortable 的 transform 直接移动卡片本体，
+              坐标基准与鼠标一致，也就不存在偏移。
+            */}
           </DndContext>
         )}
       </div>

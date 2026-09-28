@@ -1,6 +1,6 @@
 {
   "name": "baton",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "本地多项目并行管理工具",
   "author": "Baton",

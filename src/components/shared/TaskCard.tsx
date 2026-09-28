@@ -10,9 +10,23 @@ interface TaskCardProps {
   compact?: boolean;
   isDragging?: boolean;
   style?: React.CSSProperties;
+  /**
+   * 可拖拽时传入 dnd-kit 的 attributes + listeners。
+   * 传入后卡片渲染为 div[role=button]，因为拖拽要求这些属性与 onClick
+   * 落在同一个节点上，而那个节点不能是 button——否则拖动时游标/键盘行为
+   * 会被按钮语义干扰，也无法承载 dnd-kit 的 aria 属性。
+   */
+  dragHandleProps?: Record<string, unknown>;
 }
 
-export default function TaskCard({ task, onClick, compact, isDragging, style }: TaskCardProps) {
+export default function TaskCard({
+  task,
+  onClick,
+  compact,
+  isDragging,
+  style,
+  dragHandleProps,
+}: TaskCardProps) {
   const priority = PRIORITY_CONFIG[task.priority] || PRIORITY_CONFIG.medium;
   const overdue = isOverdue(task.due_date);
   const isBlocked = task.stage === 'blocked';
@@ -23,19 +37,20 @@ export default function TaskCard({ task, onClick, compact, isDragging, style }: 
     low: 'text-muted bg-muted-subtle',
   }[task.priority] || 'text-accent bg-accent-subtler';
 
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={!onClick || isDragging}
-      style={style}
-      className={`
-        card interactive-card w-full p-3 text-left group
-        ${isDragging ? 'opacity-40 scale-95' : ''}
-        ${isBlocked ? 'task-blocked' : ''}
-      `}
-      aria-label={onClick ? `打开任务：${task.title}` : `任务：${task.title}`}
-    >
+  const interactive = Boolean(onClick) && !isDragging;
+  // 拖动时只降低透明度，不做缩放：dnd-kit 的 DragOverlay 会在拖拽开始时
+  // 量取被拖卡片的尺寸，若此时卡片正被 scale-95 缩小，覆盖层就会按缩小后
+  // 的尺寸渲染（实测 218 vs 229），松手/移动时看起来就是「偏离鼠标」。
+  const className = `
+    card interactive-card w-full p-3 text-left group
+    ${isDragging ? 'opacity-40' : ''}
+    ${isBlocked ? 'task-blocked' : ''}
+    ${dragHandleProps && interactive ? 'cursor-grab active:cursor-grabbing' : ''}
+  `;
+  const ariaLabel = onClick ? `打开任务：${task.title}` : `任务：${task.title}`;
+
+  const content = (
+    <>
       {/* 项目标识色横条（非阻塞状态）*/}
       {!isBlocked && (
         <div
@@ -95,6 +110,44 @@ export default function TaskCard({ task, onClick, compact, isDragging, style }: 
           </span>
         )}
       </div>
+    </>
+  );
+
+  if (dragHandleProps) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={ariaLabel}
+        aria-disabled={!interactive}
+        onClick={interactive ? onClick : undefined}
+        onKeyDown={(event) => {
+          // dnd-kit 用空格/回车拾取拖拽，这里只处理可访问的「打开」操作
+          if (!interactive) return;
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            onClick?.();
+          }
+        }}
+        style={style}
+        className={className}
+        {...dragHandleProps}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick || isDragging}
+      style={style}
+      className={className}
+      aria-label={ariaLabel}
+    >
+      {content}
     </button>
   );
 }

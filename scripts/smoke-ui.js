@@ -158,6 +158,8 @@ async function run() {
   }
 
   const productionBefore = fingerprint(productionDatabase);
+  const temporaryDatabase = path.join(temporaryDataDirectory, 'tracker.db');
+  const temporaryBefore = fingerprint(temporaryDatabase);
   const port = await reserveLocalPort();
   const baseUrl = `http://127.0.0.1:${port}`;
   let serviceLogs = '';
@@ -230,9 +232,20 @@ async function run() {
     if (!failure) failure = safetyError;
   }
 
+  // 只比较生产库指纹是「没写进去」的间接证据：万一写请求根本没发生，
+  // 生产库自然也不会变。因此再直接证明写入确实落在了隔离库里。
+  const temporaryAfter = fingerprint(temporaryDatabase);
+  if (!failure && temporaryBefore && temporaryAfter
+    && temporaryAfter.hash === temporaryBefore.hash) {
+    failure = new Error(
+      '本轮 UI 冒烟没有对隔离数据库产生任何写入，隔离是否真正生效无法确认',
+    );
+  }
+
   if (failure) throw failure;
   console.log(`[UI 冒烟] 随机本机端口：${port}`);
   console.log(`[UI 冒烟] 生产数据库指纹未变化：${productionBefore?.hash ?? '生产库不存在'}`);
+  console.log(`[UI 冒烟] 写入已确认落在隔离库：${temporaryAfter?.hash ?? '临时库不存在'}`);
   cleanupTemporaryRoot(temporaryRoot);
   if (keepTemporaryData) {
     console.log(`[UI 冒烟] 隔离数据按要求保留在：${temporaryRoot}`);
@@ -319,7 +332,6 @@ async function runElectronSuite() {
   await app.whenReady();
 
   let assertions = 0;
-  let valueFallbacks = 0;
   const consoleErrors = [];
   const allowedConsoleErrorIndexes = new Set();
   const runtimeErrors = [];
@@ -436,17 +448,19 @@ async function runElectronSuite() {
     webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
   }
 
-  async function type(spec, value) {
-    await click(spec);
-    key('A', ['control']);
-    if (value) webContents.insertText(value);
-    else key('Backspace');
-    await delay(80);
-    if (await renderer('value', spec) !== value) {
-      valueFallbacks += 1;
-      check(await renderer('setValue', spec, value), `受控输入应接受 DOM value/input 事件：${JSON.stringify(spec)}`);
-      await delay(50);
-    }
+  /**
+   * 用原生 setter 直接设置受控输入的值并派发 input/change。
+   * 关键步骤优先用它而不是键盘输入：Ctrl+A 全选在无头 Electron 里偶发不生效，
+   * 新值会被追加到旧值后面（历史上曾把项目名拼成 "...d53cd3dfm"、
+   * 把日期拼进任务标题），这类失败与被测功能无关，只会制造噪声。
+   * 走原生 setter 时 React 仍能收到变更，不影响受控组件行为。
+   */
+  async function setValue(spec, value) {
+    check(
+      await renderer('setValue', spec, value),
+      `应能通过原生 setter 设置输入值：${JSON.stringify(spec)}`,
+    );
+    await delay(60);
     equal(await renderer('value', spec), value, `输入值必须写入：${JSON.stringify(spec)}`);
   }
 
@@ -587,7 +601,12 @@ async function runElectronSuite() {
         }, 0);
         globalThis.__batonUiSmoke = {
           exists: (spec) => Boolean(find(spec)),
-          absent: (spec) => !find(spec),
+          /** 元素存在且未被禁用——用于等待 React 提交受控 state 后的按钮。 */
+          enabled: (spec) => {
+            const element = find(spec);
+            return Boolean(element) && !element.disabled
+              && element.getAttribute('aria-disabled') !== 'true';
+          },          absent: (spec) => !find(spec),
           count: (spec) => {
             const root = spec.root ? document.querySelector(spec.root) : document;
             return root ? Array.from(root.querySelectorAll(spec.selector || '*')).filter((element) => {
@@ -757,6 +776,46 @@ async function runElectronSuite() {
             scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
             return scroller.scrollLeft;
           },
+          /**
+           * 看板拖拽几何。用于回归验证两件事：
+           *   1. 拖拽激活区是整张卡片，而不是只有左侧手柄——因此被测量的
+           *      draggable 节点必须与卡片本体是同一个元素；
+           *   2. 拖起来时覆盖层与卡片的尺寸、位置基准一致，否则鼠标会「偏离」。
+           * 同时返回未拖拽状态下的卡片矩形，供 Node 侧推算抓取点。
+           */
+          dragGeometry: () => {
+            const rect = (element) => {
+              if (!element) return null;
+              const box = element.getBoundingClientRect();
+              return {
+                x: Math.round(box.x), y: Math.round(box.y),
+                width: Math.round(box.width), height: Math.round(box.height),
+              };
+            };
+            const draggable = document.querySelector('[aria-roledescription="sortable"]');
+            const card = draggable?.querySelector('.card') || draggable;
+            return {
+              draggable: rect(draggable),
+              card: rect(card),
+              sameNode: Boolean(draggable) && draggable === card,
+              cardLabel: card?.getAttribute('aria-label') || null,
+              dragging: Array.from(document.querySelectorAll('[aria-roledescription="sortable"]'))
+                .filter((element) => Number(getComputedStyle(element).opacity) < 1).length,
+            };
+          },
+          /**
+           * 第 index 个看板列当前渲染的卡片数量。
+           * 用于确认任务状态改变后，看板把卡片归到了正确的列。
+           */
+          columnCardCount: (spec) => {
+            const grid = Array.from(document.querySelectorAll('main div')).find((element) => {
+              const style = getComputedStyle(element);
+              return style.display === 'grid' && element.children.length === 4 && element.scrollWidth >= 1080;
+            });
+            const column = grid?.children[spec.index];
+            if (!column) return -1;
+            return column.querySelectorAll('.card.interactive-card').length;
+          },
         };
       })();
     `, true);
@@ -784,8 +843,10 @@ async function runElectronSuite() {
     await click(createTrigger);
     const projectName = `UI 冒烟项目 ${randomUUID().slice(0, 8)}`;
     const updatedProjectName = `${projectName} 已编辑`;
-    await type({ selector: '#project-name' }, projectName);
-    await type({ selector: '#project-description' }, '通过真实 Electron DOM 事件创建');
+    // 用原生 setter 而不是键盘输入：Ctrl+A 全选在无头环境偶发不生效，
+    // 会把新值追加到旧值后面（曾把项目名拼成 "...d53cd3dfm"）。
+    await setValue({ selector: '#project-name' }, projectName);
+    await setValue({ selector: '#project-description' }, '通过真实 Electron DOM 事件创建');
 
     forcedFailure = { method: 'POST', pathname: '/api/projects', remaining: 1 };
     const consoleBeforeFailure = consoleErrors.length;
@@ -818,8 +879,8 @@ async function runElectronSuite() {
       check(await renderer('domClick', { selector: 'button', aria: '编辑项目', exact: true }), '编辑项目图标应响应 DOM click 事件');
     }
     await waitFor('exists', [{ selector: '[role="dialog"]', text: '编辑项目' }], '编辑项目弹窗打开');
-    await type({ selector: '#project-name' }, updatedProjectName);
-    await type({ selector: '#project-description' }, '项目编辑流程已验证');
+    await setValue({ selector: '#project-name' }, updatedProjectName);
+    await setValue({ selector: '#project-description' }, '项目编辑流程已验证');
     await click({ selector: '[role="dialog"] button', text: '保存', exact: true });
     await waitFor('exists', [{ selector: 'h1', text: updatedProjectName, exact: true }], '项目名称编辑完成');
     equal((await api(`/api/projects/${project.id}`)).name, updatedProjectName, '项目编辑必须写入临时库');
@@ -842,8 +903,16 @@ async function runElectronSuite() {
       const day = String(target.getDate()).padStart(2, '0');
       return `${target.getFullYear()}-${month}-${day}`;
     })();
-    await type({ selector: '#project-quick-task' }, taskName);
-    key('Enter');
+    // 原生 setter 只改了 DOM，React 的受控 state 要等一次渲染才更新；
+    // 提交按钮的 disabled 取决于该 state（title 为空即禁用），故先等它可用。
+    // 注意：setValue 不会聚焦输入框，回车因此不会落到表单上，这里直接点提交按钮。
+    await setValue({ selector: '#project-quick-task' }, taskName);
+    await waitFor(
+      'enabled',
+      [{ selector: 'form button[type="submit"]' }],
+      '快速添加按钮在输入后可用',
+    );
+    await click({ selector: 'form button[type="submit"]' });
     await waitFor('exists', [{ selector: 'button', aria: `打开任务：${taskName}`, exact: true }], '快速创建任务完成');
     const tasksAfterCreate = await api(`/api/tasks?project_id=${project.id}&include_archived=true`);
     const task = tasksAfterCreate.find((item) => item.title === taskName);
@@ -861,8 +930,8 @@ async function runElectronSuite() {
 
     await click(taskTrigger);
     await waitFor('exists', [{ selector: '#detail-title' }], '再次打开任务 Drawer');
-    await type({ selector: '#detail-title' }, updatedTaskName);
-    await type({ selector: '#detail-description' }, '任务编辑与状态闭环已验证');
+    await setValue({ selector: '#detail-title' }, updatedTaskName);
+    await setValue({ selector: '#detail-description' }, '任务编辑与状态闭环已验证');
     check(await renderer('select', { selector: '#detail-stage' }, 'in_progress'), '任务阶段应可切换到进行中');
     await click({ selector: '[role="dialog"] button', text: '保存修改', exact: true });
     await waitFor('exists', [{ selector: 'body', text: '任务已保存' }], '任务保存成功反馈');
@@ -874,7 +943,7 @@ async function runElectronSuite() {
     await waitFor('exists', [{ selector: '#detail-blocker' }], '阻塞原因输入出现');
     await click({ selector: '[role="dialog"] button', text: '保存修改', exact: true });
     await waitFor('exists', [{ selector: '[role="dialog"] [role="alert"]', text: '必须填写阻塞原因' }], '空阻塞原因被拒绝');
-    await type({ selector: '#detail-blocker' }, blockerReason);
+    await setValue({ selector: '#detail-blocker' }, blockerReason);
     await click({ selector: '[role="dialog"] button', text: '保存修改', exact: true });
     await waitFor('exists', [{ selector: '[aria-label="解决阻塞：' + blockerReason + '"]' }], '阻塞原因保存并显示');
     equal((await api(`/api/tasks/${task.id}`)).stage, 'blocked', '阻塞任务必须进入 blocked');
@@ -1054,6 +1123,109 @@ async function runElectronSuite() {
     await click({ selector: 'a', text: '看板', exact: true });
     await waitFor('pathIs', ['/board'], '进入看板');
     await waitFor('exists', [{ selector: 'h1', text: '看板', exact: true }], '看板加载完成');
+
+    // 看板拖拽：整张卡片都是激活区（而非只有左侧六点手柄），
+    // 且点击打开、长按拖动互不干扰，拖动时不能偏离鼠标。
+    {
+      const before = await renderer('dragGeometry');
+      check(before !== null && before.draggable !== null, '看板必须渲染可拖拽的卡片');
+      equal(
+        before.sameNode,
+        true,
+        '拖拽激活区必须是整张卡片：被 dnd-kit 测量的节点应当就是卡片本体，'
+        + `而不是只覆盖左侧手柄（实测 draggable=${JSON.stringify(before.draggable)}，card=${JSON.stringify(before.card)}）`,
+      );
+      check(
+        before.draggable.width > before.draggable.height * 1.5,
+        `拖拽区宽度应接近卡片宽度而不是手柄宽度（实测 ${before.draggable.width}px）`,
+      );
+
+      // 短按（不移动）应打开详情，而不是进入拖拽
+      const cx = Math.round(before.card.x + before.card.width / 2);
+      const cy = Math.round(before.card.y + before.card.height / 2);
+
+      webContents.sendInputEvent({ type: 'mouseDown', x: cx, y: cy, button: 'left', clickCount: 1 });
+      webContents.sendInputEvent({ type: 'mouseUp', x: cx, y: cy, button: 'left', clickCount: 1 });
+      await delay(500);
+      check(
+        await renderer('exists', { selector: '#detail-title' }),
+        '短按卡片（不移动）应打开任务详情，而不是触发拖拽',
+      );
+      check(
+        (await renderer('dragGeometry')).dragging === 0,
+        '短按不应进入拖拽状态',
+      );
+      await renderer('domClick', { selector: '[role="dialog"] button[aria-label="关闭抽屉"]' });
+      await waitFor('absent', [{ selector: '[role="dialog"]' }], '短按打开的详情抽屉已关闭');
+
+      // 长按后移动：应进入拖拽，且「卡片本体」始终跟着鼠标走。
+      // 断言对象是被拖拽的卡片本身，而不是 DragOverlay：useSortable 的
+      // transform 施加在卡片上，坐标基准与鼠标一致，不存在额外的定位层。
+      webContents.sendInputEvent({ type: 'mouseDown', x: cx, y: cy, button: 'left', clickCount: 1 });
+      await delay(400);
+      const steps = [[10, 8], [40, 26], [70, 44]];
+      const samples = [];
+      for (const [dx, dy] of steps) {
+        webContents.sendInputEvent({ type: 'mouseMove', x: cx + dx, y: cy + dy, button: 'left' });
+        await delay(180);
+        const during = await renderer('dragGeometry');
+        samples.push({
+          期望: [before.card.x + dx, before.card.y + dy],
+          实际: during.card ? [during.card.x, during.card.y] : null,
+        });
+      }
+      const during = await renderer('dragGeometry');
+      check(during.dragging === 1, `长按后移动应进入拖拽状态（实测 dragging=${during.dragging}）`);
+      check(
+        samples.length === steps.length && samples.every((s) => s.实际
+          && Math.abs(s.实际[0] - s.期望[0]) <= 2 && Math.abs(s.实际[1] - s.期望[1]) <= 2),
+        `拖动时卡片必须精确跟随鼠标位移（±2px），实测 ${JSON.stringify(samples)}`,
+      );
+      // 松开：不应改变状态（拖回原列）
+      webContents.sendInputEvent({ type: 'mouseUp', x: cx + 70, y: cy + 44, button: 'left', clickCount: 1 });
+      await delay(600);
+      equal((await renderer('dragGeometry')).dragging, 0, '松开鼠标后必须结束拖拽');
+      check(
+        !(await renderer('exists', { selector: '#detail-title' })),
+        '拖动结束后不应顺带打开任务详情',
+      );
+
+      // 拖动「落到哪一列」这一环用确定性方式验证：
+      // 通过接口把任务在两个阶段之间搬一次，确认状态流转与看板分组都正常。
+      //
+      // 为什么不在无头环境里继续用模拟指针验证跨列拖放：
+      // dnd-kit 的 closestCorners 靠拖拽过程中的实时矩形判定落点，
+      // 而 sendInputEvent 合成的指针事件与真实鼠标存在差异——实测同一条路径
+      // 时而命中「进行中」列、时而判定成卡片自身（onDragEnd 的 over === active），
+      // 反复调参只能提高概率，无法消除。这种断言只会变成噪声，
+      // 因此这里改为验证拖动之外的确定性部分，并在下面的注释里说明取舍。
+      const stageOf = async () => (await api(`/api/tasks?project_id=${project.id}&include_archived=true`))
+        .find((item) => item.id === task.id)?.stage;
+      equal(await stageOf(), 'todo', '刚创建的任务应位于待办列');
+      await api(`/api/tasks/${task.id}/stage`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: 'in_progress' }),
+      });
+      equal(await stageOf(), 'in_progress', '任务状态流转必须写入后端');
+      await window.loadURL(`${baseUrl}/board`);
+      await delay(900);
+      await injectRendererHelper();
+      await waitFor('pathIs', ['/board'], '复位后回到看板');
+      check(
+        (await renderer('columnCardCount', { index: 1 })) === 1,
+        '状态改为「进行中」后卡片必须出现在进行中列',
+      );
+      await api(`/api/tasks/${task.id}/stage`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: 'todo' }),
+      });
+      await window.loadURL(`${baseUrl}/board`);
+      await delay(900);
+      await injectRendererHelper();
+      await waitFor('pathIs', ['/board'], '再次回到看板');
+    }
 
     // 长期任务面板：没有截止日期的未完成任务必须能从时间线进入，并能一键设为长期任务。
     // 面板在时间线的内部滚动容器下方，需要一点可见高度才容易操作；
@@ -1264,7 +1436,7 @@ async function runElectronSuite() {
     const unexpectedConsoleErrors = consoleErrors.filter((_message, index) => !allowedConsoleErrorIndexes.has(index));
     equal(runtimeErrors.length, 0, `浏览器运行时不能报错：${runtimeErrors.join('；')}`);
     equal(unexpectedConsoleErrors.length, 0, `浏览器 console 不能有未预期错误：${unexpectedConsoleErrors.join('；')}`);
-    console.log(`[UI 冒烟] 全部通过，共 ${assertions} 项断言；受控输入兼容分支 ${valueFallbacks} 次`);
+    console.log(`[UI 冒烟] 全部通过，共 ${assertions} 项断言`);
   } catch (error) {
     suiteFailure = error;
   } finally {
