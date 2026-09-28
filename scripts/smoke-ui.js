@@ -1124,6 +1124,98 @@ async function runElectronSuite() {
     await waitFor('pathIs', ['/board'], '进入看板');
     await waitFor('exists', [{ selector: 'h1', text: '看板', exact: true }], '看板加载完成');
 
+    // 永久删除：只对已归档项目开放，且必须输入项目名才能确认。
+    // 这里单独造一个一次性项目来删，避免破坏后面用例仍然依赖的主项目。
+    {
+      // 未归档的项目不该出现永久删除入口
+      await click({ selector: 'a', text: '设置', exact: true });
+      await waitFor('pathIs', ['/settings'], '进入设置页检查删除入口');
+      check(
+        !(await renderer('exists', { selector: 'button', aria: `永久删除项目：${updatedProjectName}` })),
+        '未归档的项目不应出现永久删除入口（必须先归档）',
+      );
+
+      const disposable = await api('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `待删除项目 ${randomUUID().slice(0, 8)}`,
+          description: '用于验证永久删除',
+          color: '#DC2626',
+        }),
+      });
+      // 给它一个任务，用于验证任务会被一并删除
+      await api('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: disposable.id, title: '会被一并删除的任务', priority: 'low' }),
+      });
+      await api(`/api/projects/${disposable.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+
+      await window.loadURL(`${baseUrl}/settings`);
+      await delay(900);
+      await injectRendererHelper();
+      await waitFor('pathIs', ['/settings'], '回到设置页');
+      const deleteTrigger = { selector: 'button', aria: `永久删除项目：${disposable.name}` };
+      await waitFor('exists', [deleteTrigger], '已归档项目出现永久删除入口');
+
+      check(await renderer('domClick', deleteTrigger), '永久删除入口应响应点击');
+      await waitFor('exists', [{ selector: '[role="dialog"]', text: '永久删除项目' }], '永久删除确认弹窗打开');
+      check(
+        await renderer('exists', { selector: '[role="dialog"]', text: '此操作不可撤销' }),
+        '确认弹窗必须明确提示不可撤销',
+      );
+      check(
+        await renderer('exists', { selector: '[role="dialog"]', text: '阻塞记录会一并删除' }),
+        '确认弹窗必须说明阻塞记录也会被删除',
+      );
+      check(
+        await renderer('exists', { selector: '[role="dialog"]', text: '1 个任务' }),
+        '确认弹窗必须说明有多少任务会被一并删除',
+      );
+
+      // 输入不匹配时确认按钮必须保持禁用
+      await setValue({ selector: '#delete-project-confirm' }, '随便写的名字');
+      check(
+        !(await renderer('enabled', { selector: '[role="dialog"] button', text: '永久删除', exact: true })),
+        '确认文字不匹配时永久删除按钮必须禁用',
+      );
+      equal(
+        (await api(`/api/projects/${disposable.id}`)).status,
+        'archived',
+        '确认文字不匹配时不能真的删除',
+      );
+
+      // 输入正确名称后才允许删除
+      await setValue({ selector: '#delete-project-confirm' }, disposable.name);
+      await waitFor(
+        'enabled',
+        [{ selector: '[role="dialog"] button', text: '永久删除', exact: true }],
+        '确认文字正确后删除按钮可用',
+      );
+      await click({ selector: '[role="dialog"] button', text: '永久删除', exact: true });
+      await waitFor('absent', [{ selector: '[role="dialog"]' }], '删除成功后确认弹窗关闭');
+
+      // api() 对非 2xx 会抛错，这里直接取状态码验证「查不到了」
+      const projectAfterDelete = await fetch(new URL(`/api/projects/${disposable.id}`, baseUrl));
+      equal(projectAfterDelete.status, 404, '永久删除后项目必须查不到（404）');
+      const tasksAfterDelete = await api(`/api/tasks?project_id=${disposable.id}&include_archived=true`);
+      equal(tasksAfterDelete.length, 0, '项目下的任务必须被一并删除');
+      check(
+        !(await renderer('exists', deleteTrigger)),
+        '删除后项目必须从设置页的归档列表消失',
+      );
+
+      // 回到看板，后续拖拽断言依赖它
+      await click({ selector: 'a', text: '看板', exact: true });
+      await waitFor('pathIs', ['/board'], '删除用例结束后回到看板');
+      await waitFor('exists', [{ selector: 'h1', text: '看板', exact: true }], '看板重新加载完成');
+    }
+
     // 看板拖拽：整张卡片都是激活区（而非只有左侧六点手柄），
     // 且点击打开、长按拖动互不干扰，拖动时不能偏离鼠标。
     {

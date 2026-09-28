@@ -189,15 +189,67 @@ async function verifyDatabase(filePath, label) {
 
 async function runApiWorkflow(baseUrl) {
   const request = createRequester(baseUrl);
+
+  /**
+   * 直接读取隔离数据库的行数。
+   * 接口有时看不到全部数据（例如任务的 blockers 只返回未解决的），
+   * 用它在「级联删除是否真的发生」这类问题上拿到硬证据。
+   * 只读打开，不经过应用的内存库，避免读到未落盘的中间状态。
+   */
+  async function countRows(table) {
+    const SQL = await initSqlJs({
+      locateFile: (file) => path.join(projectRoot, 'node_modules', 'sql.js', 'dist', file),
+    });
+    const database = new SQL.Database(fs.readFileSync(temporaryDatabase));
+    try {
+      const result = database.exec(`SELECT COUNT(*) FROM ${table}`);
+      return Number(result[0]?.values?.[0]?.[0] ?? 0);
+    } finally {
+      database.close();
+    }
+  }
+
+  /** 只读打开隔离库，检查孤儿行与外键违规（独立于应用的内存库）。 */
+  async function inspectIntegrity() {
+    const SQL = await initSqlJs({
+      locateFile: (file) => path.join(projectRoot, 'node_modules', 'sql.js', 'dist', file),
+    });
+    const database = new SQL.Database(fs.readFileSync(temporaryDatabase));
+    try {
+      const scalar = (sql) => Number(database.exec(sql)[0]?.values?.[0]?.[0] ?? 0);
+      const orphanTasks = scalar(
+        'SELECT COUNT(*) FROM tasks t LEFT JOIN projects p ON t.project_id = p.id WHERE p.id IS NULL',
+      );
+      const orphanBlockers = scalar(
+        'SELECT COUNT(*) FROM blockers b LEFT JOIN tasks t ON b.task_id = t.id WHERE t.id IS NULL',
+      );
+      // foreign_key_check 需要开启 enforcement 才有意义
+      database.run('PRAGMA foreign_keys = ON');
+      const violations = database.exec('PRAGMA foreign_key_check')[0];
+      const integrityOk = String(
+        database.exec('PRAGMA integrity_check')[0]?.values?.[0]?.[0] ?? '',
+      ).toLowerCase() === 'ok';
+      return {
+        orphanTasks,
+        orphanBlockers,
+        foreignKeyViolations: violations ? violations.values.length : 0,
+        integrityOk,
+      };
+    } finally {
+      database.close();
+    }
+  }
+
   const suffix = `${Date.now()}-${process.pid}`;
   const initialProjects = await request('/api/projects?include_archived=true');
   const initialTasks = await request('/api/tasks?include_archived=true');
 
+  const projectName = `接口回归项目-${suffix}`;
   const project = await request('/api/projects', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      name: `接口回归项目-${suffix}`,
+      name: projectName,
       description: '仅用于临时数据库的自动化回归',
       color: '#2563EB',
     }),
@@ -330,6 +382,75 @@ async function runApiWorkflow(baseUrl) {
   equal(allTasks.length, initialTasks.length + 1, '任务归档/恢复不能物理删除行');
   verify(allProjects.some((item) => item.id === project.id), '项目行必须仍然存在');
   verify(allTasks.some((item) => item.id === task.id), '任务行必须仍然存在');
+
+  // === 永久删除：只对已归档项目生效，且必须级联清掉任务与阻塞 ===
+  // 先在不归档的情况下尝试永久删除，确认被拒绝
+  const prematureDelete = await request(
+    `/api/projects/${project.id}?permanent=true`,
+    { method: 'DELETE' },
+    400,
+  );
+  verify(String(prematureDelete?.error).includes('归档'), '未归档项目不能永久删除');
+  verify(
+    (await request('/api/projects?include_archived=true')).some((item) => item.id === project.id),
+    '被拒绝的删除不能真的删掉项目',
+  );
+
+  // 用上面那条「等待设计确认」阻塞做级联验证（该任务全流程只创建过这一条），
+  // 直接读库统计行数：任务的接口只返回「未解决」的阻塞，靠接口计数会漏。
+  const blockersBefore = await countRows('blockers');
+  const tasksBefore = await countRows('tasks');
+  const projectsBefore = await countRows('projects');
+
+  await request(`/api/projects/${project.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'archived' }),
+  });
+
+  const permanent = await request(`/api/projects/${project.id}?permanent=true`, { method: 'DELETE' });
+  equal(permanent.permanent, true, '永久删除必须返回 permanent 标记');
+  equal(permanent.deletedTasks, 1, '永久删除必须报告一并删除的任务数');
+
+  const projectsAfterDelete = await request('/api/projects?include_archived=true');
+  verify(!projectsAfterDelete.some((item) => item.id === project.id), '项目行必须被真正删除');
+  const tasksAfterDelete = await request('/api/tasks?include_archived=true');
+  verify(!tasksAfterDelete.some((item) => item.id === task.id), '项目下的任务必须被级联删除');
+
+  // 级联的硬证据：直接读库核对行数，且接口报告的数字必须与实际减少的行数一致
+  const blockersAfter = await countRows('blockers');
+  equal(
+    blockersBefore - blockersAfter,
+    permanent.deletedBlockers,
+    '接口报告的阻塞删除数必须与实际减少的行数一致',
+  );
+  verify(permanent.deletedBlockers >= 1, '任务的阻塞记录必须被一并删除');
+  equal(await countRows('tasks'), tasksBefore - 1, '任务表必须实际少一行（直接读库核对）');
+  equal(await countRows('projects'), projectsBefore - 1, '项目表必须实际少一行（直接读库核对）');
+
+  // 活动历史必须保留，但解除关联（schema 里是 ON DELETE SET NULL）
+  const activityAfterDelete = await request('/api/activity?limit=100');
+  const deleteRecord = activityAfterDelete.find((item) => item.action === 'project_deleted');
+  verify(Boolean(deleteRecord), '永久删除必须在活动流里留下记录');
+  equal(deleteRecord.project_id ?? null, null, '活动记录的项目关联必须被置空而不是整条删除');
+  verify(
+    String(deleteRecord.detail).includes(projectName),
+    '删除记录必须写明被删掉的项目名（关联置空后只剩这一处可追溯）',
+  );
+
+  const missing = await request(`/api/projects/${project.id}?permanent=true`, { method: 'DELETE' }, 404);
+  verify(String(missing?.error).includes('不存在'), '重复删除必须返回 404');
+
+  // 最强的一条：删除后数据库里不能留下任何孤儿行。
+  // 这一条正是当初抓到问题的断言——schema 里虽然写了 ON DELETE CASCADE，
+  // 但 sql.js 的 PRAGMA foreign_keys 默认关闭，只靠 schema 会让任务行残留成
+  // 指向不存在项目的孤儿行，而且 foreign_key_check 会报出违规。
+  // 因此实现里改成了显式手工级联，这里用只读连接独立复核结果。
+  const integrity = await inspectIntegrity();
+  equal(integrity.orphanTasks, 0, '删除项目后不能残留指向不存在项目的任务行');
+  equal(integrity.orphanBlockers, 0, '删除任务后不能残留指向不存在任务的阻塞行');
+  equal(integrity.foreignKeyViolations, 0, '删除后数据库不能有任何外键违规');
+  verify(integrity.integrityOk, '删除后数据库完整性检查必须通过');
 }
 
 async function main() {

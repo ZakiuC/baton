@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
-import { Archive, ArrowLeft, Monitor, Power, Palette, Check, Sun, Moon, ChevronDown, ChevronRight, Info, LoaderCircle, RotateCcw } from 'lucide-react';
+import { Archive, ArrowLeft, Monitor, Power, Palette, Check, Sun, Moon, ChevronDown, ChevronRight, Info, LoaderCircle, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from '@/components/shared/ThemeProvider';
 import { allThemes, Theme } from '@/lib/themes';
@@ -12,6 +12,7 @@ import { useCanUseDOM, useIsElectron } from '@/lib/use-electron';
 import { Project } from '@/lib/queries/projects';
 import { Task } from '@/lib/queries/tasks';
 import { apiRequest, getErrorMessage } from '@/lib/client-api';
+import Modal from '@/components/shared/Modal';
 
 export default function SettingsPage() {
   const [autoLaunch, setAutoLaunch] = useState(false);
@@ -23,6 +24,13 @@ export default function SettingsPage() {
   const [archiveLoading, setArchiveLoading] = useState(true);
   const [archiveError, setArchiveError] = useState('');
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  /** 待永久删除的项目（打开确认弹窗用）；null 表示弹窗关闭。 */
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
+  /** 确认弹窗里必须原样输入的确认短语。 */
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  /** 该项目的任务数，用于在确认弹窗里把后果说清楚。 */
+  const [deleteTaskCount, setDeleteTaskCount] = useState<number | null>(null);
   const isElectron = useIsElectron();
   const canUseDOM = useCanUseDOM();
   const [savingSetting, setSavingSetting] = useState<'autoLaunch' | 'tray' | null>(null);
@@ -135,8 +143,43 @@ export default function SettingsPage() {
     }
   };
 
-  const restoreTask = async (task: Task) => {
-    setRestoringId(task.id);
+  /** 打开永久删除确认弹窗，并先查出该项目下有多少任务会被一并删除。 */
+  const openDeleteDialog = async (project: Project) => {
+    setProjectToDelete(project);
+    setDeleteConfirmText('');
+    setDeleteTaskCount(null);
+    try {
+      const tasks = await apiRequest<Task[]>(`/api/tasks?project_id=${project.id}&include_archived=true`);
+      setDeleteTaskCount(tasks.length);
+    } catch {
+      // 查不到数量不影响删除，弹窗里会退化成不显示数量
+      setDeleteTaskCount(null);
+    }
+  };
+
+  /**
+   * 永久删除已归档项目。不可逆：项目连同其任务、阻塞记录一并从数据库移除，
+   * 活动流里会保留一条「永久删除了项目」的记录（project_id 置空）。
+   */
+  const deleteProjectPermanently = async (project: Project) => {
+    setDeletingProjectId(project.id);
+    try {
+      await apiRequest<{ deletedTasks: number }>(
+        `/api/projects/${project.id}?permanent=true`,
+        { method: 'DELETE' },
+      );
+      setProjectToDelete(null);
+      await loadArchivedItems();
+      window.dispatchEvent(new CustomEvent('project-updated'));
+      notify(`项目“${project.name}”已永久删除。`, 'success');
+    } catch (error: unknown) {
+      notify(getErrorMessage(error, '项目删除失败，请重试'), 'error');
+    } finally {
+      setDeletingProjectId(null);
+    }
+  };
+
+  const restoreTask = async (task: Task) => {    setRestoringId(task.id);
     try {
       await apiRequest<Task>(`/api/tasks/${task.id}`, {
         method: 'PUT',
@@ -292,7 +335,9 @@ export default function SettingsPage() {
           </div>
           <div className="min-w-0 flex-1">
             <h2 id="archive-management-title" className="text-sm font-semibold text-primary">归档管理</h2>
-            <p className="text-xs text-muted mt-0.5">归档只隐藏数据，不会删除；可在这里恢复。</p>
+            <p className="text-xs text-muted mt-0.5">
+              归档只隐藏数据，可随时恢复；已归档的项目也可以永久删除（不可撤销）。
+            </p>
           </div>
           {!archiveLoading ? (
             <span className="badge bg-muted-subtle text-muted">
@@ -327,7 +372,7 @@ export default function SettingsPage() {
                         <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: project.color }} aria-hidden="true" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-xs font-medium text-primary">{project.name}</p>
-                          <p className="mt-0.5 text-[11px] text-muted">项目内数据均保持原样</p>
+                          <p className="mt-0.5 text-[11px] text-muted">可恢复，也可永久删除</p>
                         </div>
                         <button
                           type="button"
@@ -339,6 +384,18 @@ export default function SettingsPage() {
                             ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
                             : <RotateCcw size={13} aria-hidden="true" />}
                           恢复
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary text-danger"
+                          disabled={deletingProjectId !== null || restoringId !== null}
+                          onClick={() => void openDeleteDialog(project)}
+                          aria-label={`永久删除项目：${project.name}`}
+                        >
+                          {deletingProjectId === project.id
+                            ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
+                            : <Trash2 size={13} aria-hidden="true" />}
+                          永久删除
                         </button>
                       </div>
                     ))}
@@ -408,6 +465,78 @@ export default function SettingsPage() {
         </div>
         <ChevronRight size={15} className="text-muted flex-shrink-0" aria-hidden="true" />
       </Link>
+
+      {/*
+        永久删除确认弹窗。删除不可逆，因此要求把项目名原样输入一遍，
+        而不是点一下「确定」就删——这是不可逆操作的标准做法。
+      */}
+      <Modal
+        open={projectToDelete !== null}
+        onClose={() => {
+          if (deletingProjectId) return;
+          setProjectToDelete(null);
+        }}
+        title="永久删除项目"
+      >
+        {projectToDelete ? (
+          <div className="space-y-4">
+            <div
+              className="rounded-lg border px-3 py-2.5"
+              style={{ borderColor: 'var(--t-danger)', background: 'var(--t-danger-light)' }}
+            >
+              <p className="text-xs text-danger font-medium">此操作不可撤销，数据无法找回。</p>
+            </div>
+
+            <ul className="space-y-1.5 text-xs text-muted">
+              <li>· 项目“{projectToDelete.name}”本身会被删除</li>
+              <li>
+                · 该项目下的
+                {deleteTaskCount === null ? '全部任务' : ` ${deleteTaskCount} 个任务`}
+                会一并删除
+              </li>
+              <li>· 这些任务的阻塞记录会一并删除</li>
+              <li>· 活动记录会保留，并留下一条“永久删除了项目”的历史</li>
+            </ul>
+
+            <div>
+              <label htmlFor="delete-project-confirm" className="mb-1.5 block text-xs font-medium text-primary">
+                请输入项目名称以确认：<span className="font-mono text-danger">{projectToDelete.name}</span>
+              </label>
+              <input
+                id="delete-project-confirm"
+                type="text"
+                autoComplete="off"
+                className="field-control w-full px-3 text-sm"
+                value={deleteConfirmText}
+                onChange={(event) => setDeleteConfirmText(event.target.value)}
+                placeholder={projectToDelete.name}
+                data-initial-focus
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={deletingProjectId !== null}
+                onClick={() => setProjectToDelete(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                style={{ background: 'var(--t-danger)' }}
+                disabled={deleteConfirmText.trim() !== projectToDelete.name || deletingProjectId !== null}
+                onClick={() => void deleteProjectPermanently(projectToDelete)}
+              >
+                {deletingProjectId ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" /> : null}
+                永久删除
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 }

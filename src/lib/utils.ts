@@ -38,6 +38,7 @@ export const ACTION_LABELS: Record<string, string> = {
   'task_created': '创建了任务',
   'blocker_added': '添加了阻塞原因',
   'blocker_resolved': '解决了阻塞原因',
+  'project_deleted': '永久删除了项目',
 };
 
 // 日期格式化
