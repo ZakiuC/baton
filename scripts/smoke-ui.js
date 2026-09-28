@@ -601,12 +601,50 @@ async function runElectronSuite() {
         }, 0);
         globalThis.__batonUiSmoke = {
           exists: (spec) => Boolean(find(spec)),
+          /**
+           * 命中测试：输入框中心点到底命中了谁，以及它是否被 inert / pointer-events
+           * 挡住。用于守住「控件看得到却点不进去」这类问题——这类问题 setValue 测不出来，
+           * 因为原生 setter 不经过命中测试。
+           */
+          hitTest: (spec) => {
+            const element = find(spec);
+            if (!element) return { found: false };
+            const box = element.getBoundingClientRect();
+            const top = document.elementFromPoint(
+              Math.round(box.x + box.width / 2),
+              Math.round(box.y + box.height / 2),
+            );
+            let inertAncestor = null;
+            let pointerEventsNoneAncestor = null;
+            let node = element;
+            while (node && node !== document.documentElement) {
+              if (!inertAncestor && node.inert) {
+                inertAncestor = node.tagName + '.' + String(node.className).slice(0, 30);
+              }
+              if (!pointerEventsNoneAncestor && getComputedStyle(node).pointerEvents === 'none') {
+                pointerEventsNoneAncestor = node.tagName + '.' + String(node.className).slice(0, 30);
+              }
+              node = node.parentElement;
+            }
+            return {
+              found: true,
+              visible: box.width > 0 && box.height > 0,
+              withinViewport: box.top >= 0 && box.bottom <= window.innerHeight,
+              disabled: element.disabled,
+              readOnly: element.readOnly,
+              topIsSelf: top === element,
+              topAtCenter: top ? top.tagName + '#' + (top.id || '') : null,
+              inertAncestor,
+              pointerEventsNoneAncestor,
+            };
+          },
           /** 元素存在且未被禁用——用于等待 React 提交受控 state 后的按钮。 */
           enabled: (spec) => {
             const element = find(spec);
             return Boolean(element) && !element.disabled
               && element.getAttribute('aria-disabled') !== 'true';
-          },          absent: (spec) => !find(spec),
+          },
+          absent: (spec) => !find(spec),
           count: (spec) => {
             const root = spec.root ? document.querySelector(spec.root) : document;
             return root ? Array.from(root.querySelectorAll(spec.selector || '*')).filter((element) => {
@@ -854,6 +892,76 @@ async function runElectronSuite() {
     await waitFor('exists', [{ selector: '[role="dialog"] [role="alert"]' }], '失败反馈显示且表单保留');
     equal(await renderer('value', { selector: '#project-name' }), projectName, '请求失败后项目名称必须保留');
     check(await renderer('exists', { selector: '[role="dialog"]' }), '请求失败后表单不能关闭');
+
+    // 真实鼠标点击 + 真实键盘输入。
+    // 关键：setValue 走的是原生 setter，会绕过命中测试与键盘事件，
+    // 因此「输入框点不进去 / 打不了字 / 选不中」这类问题它一个都测不出来。
+    // 这里必须用 sendInputEvent + insertText 走真实链路。
+    {
+      const nameBox = await renderer('elementRect', { selector: '#project-name' });
+      check(Boolean(nameBox), '新建项目弹窗必须能取到项目名称输入框的位置');
+      const hit = await renderer('hitTest', { selector: '#project-name' });
+      equal(
+        hit.topIsSelf,
+        true,
+        `输入框中心必须命中输入框自身而不是被别的元素挡住（实测命中 ${hit.topAtCenter}）`,
+      );
+      equal(hit.inertAncestor, null, `输入框不能位于 inert 容器内（实测 ${hit.inertAncestor}）`);
+
+      await setValue({ selector: '#project-name' }, '');
+      const cx = Math.round(nameBox.x + nameBox.width / 2);
+      const cy = Math.round(nameBox.y + nameBox.height / 2);
+      webContents.sendInputEvent({ type: 'mouseDown', x: cx, y: cy, button: 'left', clickCount: 1 });
+      webContents.sendInputEvent({ type: 'mouseUp', x: cx, y: cy, button: 'left', clickCount: 1 });
+      await delay(150);
+      check(
+        await renderer('activeMatches', { selector: '#project-name' }),
+        '真实鼠标点击后项目名称输入框必须获得焦点',
+      );
+
+      const typed = '真实键盘输入';
+      webContents.insertText(typed);
+      await delay(150);
+      equal(
+        await renderer('value', { selector: '#project-name' }),
+        typed,
+        '真实键盘输入必须能写进项目名称输入框',
+      );
+
+      // 全选能力（用户提到「选中不了」）
+      key('A', ['control']);
+      await delay(100);
+      const selectionLength = await webContents.executeJavaScript(
+        `(() => { const el = document.querySelector('#project-name');
+          return el ? (el.selectionEnd - el.selectionStart) : -1; })()`, true,
+      );
+      equal(selectionLength, typed.length, 'Ctrl+A 必须能选中输入框里的全部文字');
+
+      // 描述框同样要能用真实点击进入（先清空，否则输入会追加到既有内容后面）
+      const areaBox = await renderer('elementRect', { selector: '#project-description' });
+      check(Boolean(areaBox), '新建项目弹窗必须能取到描述框的位置');
+      await setValue({ selector: '#project-description' }, '');
+      const ax = Math.round(areaBox.x + areaBox.width / 2);
+      const ay = Math.round(areaBox.y + areaBox.height / 2);
+      webContents.sendInputEvent({ type: 'mouseDown', x: ax, y: ay, button: 'left', clickCount: 1 });
+      webContents.sendInputEvent({ type: 'mouseUp', x: ax, y: ay, button: 'left', clickCount: 1 });
+      await delay(150);
+      check(
+        await renderer('activeMatches', { selector: '#project-description' }),
+        '真实鼠标点击后描述框必须获得焦点',
+      );
+      webContents.insertText('描述也能输入');
+      await delay(150);
+      equal(
+        await renderer('value', { selector: '#project-description' }),
+        '描述也能输入',
+        '真实键盘输入必须能写进项目描述框',
+      );
+
+      // 复位成后续断言期望的值
+      await setValue({ selector: '#project-name' }, projectName);
+      await setValue({ selector: '#project-description' }, '通过真实 Electron DOM 事件创建');
+    }
     equal((await api('/api/projects?include_archived=true')).length, 0, '失败请求不能假成功或写入项目');
     equal(forcedFailureHits, 1, '故障注入必须且只能命中一次');
     consoleErrors.slice(consoleBeforeFailure).forEach((message, offset) => {
@@ -1198,7 +1306,9 @@ async function runElectronSuite() {
         '确认文字正确后删除按钮可用',
       );
       await click({ selector: '[role="dialog"] button', text: '永久删除', exact: true });
-      await waitFor('absent', [{ selector: '[role="dialog"]' }], '删除成功后确认弹窗关闭');
+      // 永久删除要在一个事务里级联删掉任务与阻塞并整库落盘，比普通请求慢，
+      // 因此这里给足等待时间，避免把「慢」误判成「没关」。
+      await waitFor('absent', [{ selector: '[role="dialog"]' }], '删除成功后确认弹窗关闭', 15_000);
 
       // api() 对非 2xx 会抛错，这里直接取状态码验证「查不到了」
       const projectAfterDelete = await fetch(new URL(`/api/projects/${disposable.id}`, baseUrl));

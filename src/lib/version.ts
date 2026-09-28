@@ -13,7 +13,7 @@
  *   3. 开发中的改动先累积在「未发布」分组，打包交付时再定版本号落地。
  */
 
-export const APP_VERSION = '2.2.0';
+export const APP_VERSION = '2.2.1';
 
 export interface ChangeGroup {
   /** 分组标题，使用 Conventional Commits 的类型词。 */
@@ -40,6 +40,31 @@ export const CHANGE_GROUP_LABELS: Record<ChangeGroup['kind'], string> = {
 
 /** 最新版本在最上方。 */
 export const CHANGELOG: VersionEntry[] = [
+  {
+    version: '2.2.1',
+    released: '2026-09-28',
+    summary: '补齐「输入框能否真的点进去、打得进字」的自动化覆盖。',
+    groups: [
+      {
+        kind: 'chore',
+        items: [
+          'UI 冒烟新增真实鼠标点击与真实键盘输入断言（共 182 项，较上版 +17）：'
+          + '新建项目弹窗的输入框中心必须命中自身而不是被遮挡、不能位于 inert 容器内、'
+          + '鼠标点击后必须获得焦点、键盘输入必须真的写进值里、Ctrl+A 必须能全选。',
+          '之所以专门补这一类断言：此前的输入用例走的是原生 setter 赋值，'
+          + '它绕过命中测试与键盘事件，因此「控件看得到却点不进去」这类问题一个都测不出来。'
+          + '今后新增输入控件应优先复用真实点击/输入的断言方式。',
+        ],
+      },
+      {
+        kind: 'fix',
+        items: [
+          '修复永久删除成功后的等待过短问题：删除要在一个事务里级联清理并整库落盘，'
+          + '比普通请求慢，原等待时间偶尔不够而误报「弹窗未关闭」。该步骤改为等待 15 秒。',
+        ],
+      },
+    ],
+  },
   {
     version: '2.2.0',
     released: '2026-09-28',
