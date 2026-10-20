@@ -13,7 +13,7 @@
  *   3. 开发中的改动先累积在「未发布」分组，打包交付时再定版本号落地。
  */
 
-export const APP_VERSION = '2.2.1';
+export const APP_VERSION = '2.3.0';
 
 export interface ChangeGroup {
   /** 分组标题，使用 Conventional Commits 的类型词。 */
@@ -40,6 +40,39 @@ export const CHANGE_GROUP_LABELS: Record<ChangeGroup['kind'], string> = {
 
 /** 最新版本在最上方。 */
 export const CHANGELOG: VersionEntry[] = [
+  {
+    version: '2.3.0',
+    released: '2026-10-20',
+    summary: '按「机台」方向重塑整产品 UI：暗色工业控制台、四态状态灯与告警台，保留全部旧主题并新增两套机台皮肤。',
+    groups: [
+      {
+        kind: 'feat',
+        items: [
+          '新的「机台」工作区：左侧栏改为 44px 顶部状态栏，导航、项目切换、进行中/阻塞/今日到期读数、时钟与新建入口收在一行；仪表盘由「四指标卡 + 项目卡 + 活动流」改为机台卡 + 告警台 + 一周负荷 + 运行日志。',
+          '告警台把阻塞、逾期、停滞、今日到期和临近到期放在首屏固定位置，并为运行/空闲/静默逾期/阻塞提供四态灯图例；机台卡头部直接显示最近动作与下一项到期。',
+          '看板改为四阶段扁平行：已完成默认折成 3 项并可展开，0 阻塞列退为中性色；900px 宽提供四阶段固定入口与横向滚动提示，1920px 宽增加板面读数（项目分布、即将到期、阻塞）。',
+          '项目页四阶段占满宽度，完整活动移入右上角抽屉；归档项目显示只读视图，不再出现拖拽落位框。',
+          '设置页主题分为「本机 / 其他主题」：新增「机台 · 石墨」默认暗色与「机台 · 铝白」亮色皮肤，恢复 Original Indigo 作为可选经典皮肤，共 15 套。',
+          '自托管 IBM Plex Sans（可变）与 IBM Plex Mono 字体，中文回退 Microsoft YaHei UI；离线可用，随安装包分发。',
+        ],
+      },
+      {
+        kind: 'fix',
+        items: [
+          '修复深色/亮色主题下次级文字和主按钮对比度不足的问题；把日志、活动时间与计数从 9–10px 提到可读字号，并让时间独立成列。',
+          '修复运行日志非时间序、阶段变化被截断的问题：日志按时间倒序，阶段变化单独成列完整显示。',
+          '修复任务抽屉底部操作条悬空、日期空态中英混排、禁用态难以辨认的问题。',
+        ],
+      },
+      {
+        kind: 'chore',
+        items: [
+          'UI 冒烟适配顶部状态栏布局：项目入口不再依赖左侧栏，项目返回改为按 URL 导航；其余 181 项断言保留，生产库在测试期间未被写入。',
+          '发布 v2.3.0：更新版本号、更新记录与安装目录产物；旧版安装目录保留以便回退。',
+        ],
+      },
+    ],
+  },
   {
     version: '2.2.1',
     released: '2026-09-28',
@@ -371,13 +404,12 @@ export const APP_FEATURES: { title: string; detail: string }[] = [
   { title: '时间线', detail: '按周铺开所有带截止日期的任务，直观看到这一周的排期。' },
   { title: '阻塞闭环', detail: '标记阻塞必须写清原因；最后一个阻塞被解决时，任务自动回到进行中。' },
   { title: '可恢复归档', detail: '项目与任务只归档不删除，随时可以在设置页恢复，历史记录完整保留。' },
-  { title: '主题', detail: '13 套主题（默认 + 6 暗色 + 6 亮色），选择结果保存在本机配置里。' },
+  { title: '主题', detail: '15 套主题（机台默认 + 6 暗色 + 8 亮色），选择结果保存在本机配置里。' },
 ];
 
 export const APP_STACK: { label: string; value: string }[] = [
-  { label: '应用框架', value: 'Next.js 16（App Router）· React 19' },
-  { label: '桌面外壳', value: 'Electron 43 · 内嵌服务运行在 127.0.0.1:3099' },
-  { label: '数据存储', value: 'sql.js（SQLite WASM）· 单文件 tracker.db · 事务快照 + 原子替换' },
-  { label: '样式', value: 'Tailwind CSS v4 · CSS 变量主题令牌' },
+  { label: '运行方式', value: '桌面应用 · 本机离线运行，不联网、不上传' },
+  { label: '数据存储', value: '本机单文件数据库（tracker.db）' },
   { label: '数据位置', value: '%APPDATA%\\baton\\data\\tracker.db' },
+  { label: '备份提醒', value: '当前版本不会自动轮转备份；建议定期复制 tracker.db 与 .bak' },
 ];

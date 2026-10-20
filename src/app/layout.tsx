@@ -2,275 +2,73 @@
 
 import './globals.css';
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
-import {
-  LayoutDashboard,
-  Columns3,
-  CalendarRange,
-  Settings,
-  ChevronsLeft,
-  ChevronsRight,
-  RefreshCw,
-} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { Project } from '@/lib/queries/projects';
-import FloatingButton from '@/components/shared/FloatingButton';
+import { DashboardStats } from '@/lib/queries/dashboard';
 import FeedbackProvider from '@/components/shared/Feedback';
 import ThemeProvider, { THEME_BOOTSTRAP_SCRIPT } from '@/components/shared/ThemeProvider';
-import { APP_NAME, APP_NAME_FULL } from '@/lib/version';
+import TopBar from '@/components/shared/TopBar';
+import { APP_NAME_FULL } from '@/lib/version';
 
-const NAV_ITEMS = [
-  { href: '/',         icon: LayoutDashboard, label: '仪表盘' },
-  { href: '/board',    icon: Columns3,        label: '看板'   },
-  { href: '/timeline', icon: CalendarRange,   label: '时间线' },
-];
-
-const SIDEBAR_STORAGE_KEY = 'baton-sidebar-collapsed';
-const SIDEBAR_CHANGED_EVENT = 'baton-sidebar-changed';
-
-function subscribeToSidebar(onStoreChange: () => void) {
-  window.addEventListener('resize', onStoreChange);
-  window.addEventListener('storage', onStoreChange);
-  window.addEventListener(SIDEBAR_CHANGED_EVENT, onStoreChange);
-  return () => {
-    window.removeEventListener('resize', onStoreChange);
-    window.removeEventListener('storage', onStoreChange);
-    window.removeEventListener(SIDEBAR_CHANGED_EVENT, onStoreChange);
-  };
-}
-
-function getSidebarSnapshot() {
-  const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-  return stored === null ? window.innerWidth <= 1050 : stored === 'true';
-}
-
-function getServerSidebarSnapshot() {
-  return false;
-}
-
+/**
+ * 应用外壳：顶部常驻状态栏 + 单一主滚动区。
+ * 原来固定左侧栏里的项目列表、设置入口和折叠按钮都并入状态栏；
+ * 「设置」仍是可见文字链接，导航文字也保持原样（既有 UI 冒烟与用户心智的锚点）。
+ */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const collapsed = useSyncExternalStore(
-    subscribeToSidebar,
-    getSidebarSnapshot,
-    getServerSidebarSnapshot,
-  );
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectsError, setProjectsError] = useState(false);
-  const pathname = usePathname();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
-  const loadProjects = useCallback(async () => {
+  const loadShellData = useCallback(async () => {
     try {
-      const response = await fetch('/api/projects');
-      if (!response.ok) throw new Error('项目列表加载失败');
-      const data = await response.json();
-      if (!Array.isArray(data)) throw new Error('项目数据格式错误');
-      setProjects(data.filter((project: Project) => project.status === 'active'));
-      setProjectsError(false);
+      const [projectsResponse, dashboardResponse] = await Promise.all([
+        fetch('/api/projects'),
+        fetch('/api/dashboard'),
+      ]);
+      if (projectsResponse.ok) {
+        const data = await projectsResponse.json();
+        if (Array.isArray(data)) {
+          setProjects(data.filter((project: Project) => project.status === 'active'));
+        }
+      }
+      if (dashboardResponse.ok) {
+        const data = await dashboardResponse.json();
+        if (data && data.stats) setStats(data.stats as DashboardStats);
+      }
     } catch {
-      setProjectsError(true);
+      // 顶部读数只是辅助信息，失败时保持空读数，不阻塞页面。
     }
   }, []);
 
   useEffect(() => {
-    const initialLoadTimer = window.setTimeout(() => void loadProjects(), 0);
-    const handler = () => void loadProjects();
-    window.addEventListener('project-created', handler);
-    window.addEventListener('project-updated', handler);
+    const initialLoadTimer = window.setTimeout(() => void loadShellData(), 0);
+    const handler = () => void loadShellData();
+    const events = ['project-created', 'project-updated', 'task-created', 'task-updated'];
+    events.forEach((eventName) => window.addEventListener(eventName, handler));
     return () => {
       window.clearTimeout(initialLoadTimer);
-      window.removeEventListener('project-created', handler);
-      window.removeEventListener('project-updated', handler);
+      events.forEach((eventName) => window.removeEventListener(eventName, handler));
     };
-  }, [loadProjects]);
-
-  const toggleSidebar = () => {
-    localStorage.setItem(SIDEBAR_STORAGE_KEY, String(!collapsed));
-    window.dispatchEvent(new Event(SIDEBAR_CHANGED_EVENT));
-  };
+  }, [loadShellData]);
 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <title>{APP_NAME_FULL}</title>
         <meta name="description" content="本地多项目并行管理工作台" />
-        <meta name="theme-color" content="#FAFAFB" />
+        <meta name="theme-color" content="#0E1115" />
       </head>
       <body>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
         <ThemeProvider>
           <FeedbackProvider>
-          <a href="#main-content" className="skip-link">跳到主要内容</a>
-          <div id="app-shell" className="app-shell flex h-screen overflow-hidden" style={{ background: 'var(--t-surface)' }}>
-            {/* ── 侧边栏 ── */}
-            <aside
-              className="flex flex-col flex-shrink-0 overflow-hidden transition-[width] duration-200"
-              aria-label="应用侧栏"
-              style={{
-                width: collapsed ? '56px' : '216px',
-                background: 'var(--t-sidebar)',
-                borderRight: '1px solid var(--t-border)',
-              }}
-            >
-              {/* 标志区 */}
-              <div
-                className="flex items-center gap-2.5 px-3.5 py-4 flex-shrink-0"
-                style={{ borderBottom: '1px solid var(--t-border)' }}
-              >
-                {/* 品牌标识直接用应用图标本身（src/app/icon.svg），
-                    而不是另一个近似的图标库字形，避免与窗口/安装包图标不一致。 */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/icon.svg"
-                  alt=""
-                  width={28}
-                  height={28}
-                  className="w-7 h-7 rounded-lg flex-shrink-0"
-                  aria-hidden="true"
-                />
-                {!collapsed && (
-                  <span className="text-sm font-bold text-primary tracking-tight truncate">
-                    {APP_NAME}
-                  </span>
-                )}
-              </div>
-
-              {/* 滚动区 */}
-              <div className="flex-1 overflow-y-auto overflow-x-hidden py-3">
-                {/* 导航区 */}
-                {!collapsed && (
-                  <p className="px-3.5 mb-1.5 text-[11px] font-semibold text-muted opacity-70">
-                    导航
-                  </p>
-                )}
-                <nav className="px-2 space-y-0.5" aria-label="主导航">
-                  {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-                    const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href);
-                    return (
-                      <Link
-                        key={href}
-                        href={href}
-                        className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-[color,background-color] duration-150 group ${
-                          isActive
-                            ? 'bg-accent-subtle text-accent'
-                            : 'text-muted hover:text-primary hover:bg-bg-hover'
-                        }`}
-                        title={collapsed ? label : undefined}
-                        aria-label={collapsed ? label : undefined}
-                        aria-current={isActive ? 'page' : undefined}
-                      >
-                        <Icon
-                          size={15}
-                          className="flex-shrink-0"
-                          color={isActive ? 'var(--t-accent)' : 'currentColor'}
-                          aria-hidden="true"
-                        />
-                        {!collapsed && <span>{label}</span>}
-                        {!collapsed && isActive && (
-                          <span className="ml-auto w-1 h-1 rounded-full bg-accent" aria-hidden="true" />
-                        )}
-                      </Link>
-                    );
-                  })}
-                </nav>
-
-                {/* 项目列表 */}
-                <div className="mt-4">
-                  {!collapsed && (
-                    <p className="px-3.5 mb-1.5 text-[11px] font-semibold text-muted opacity-70">
-                      项目
-                    </p>
-                  )}
-                  <div className="px-2 space-y-0.5">
-                    {projects.map((p) => {
-                      const isActive = pathname === `/project/${p.id}`;
-                      return (
-                        <Link
-                          key={p.id}
-                          href={`/project/${p.id}`}
-                          className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs transition-[color,background-color] duration-150 group ${
-                            isActive
-                              ? 'bg-bg-hover text-primary'
-                              : 'text-muted hover:text-primary hover:bg-bg-hover'
-                          }`}
-                          title={collapsed ? p.name : undefined}
-                          aria-current={isActive ? 'page' : undefined}
-                        >
-                          <span
-                            className="w-2 h-2 rounded-sm flex-shrink-0"
-                            style={{ backgroundColor: p.color }}
-                            aria-hidden="true"
-                          />
-                          {!collapsed && (
-                            <span className="truncate flex-1">{p.name}</span>
-                          )}
-                        </Link>
-                      );
-                    })}
-                    {projects.length === 0 && !collapsed && (
-                      projectsError ? (
-                        <div className="mx-1 mt-1 rounded-md border border-danger/20 bg-danger-bg px-2.5 py-2 text-[11px] text-danger" role="status">
-                          <p>项目列表暂不可用</p>
-                          <button
-                            type="button"
-                            onClick={() => void loadProjects()}
-                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium hover:underline"
-                          >
-                            <RefreshCw size={11} aria-hidden="true" />
-                            重试
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="px-2.5 py-2 text-[11px] text-muted opacity-70">
-                          暂无活跃项目
-                        </p>
-                      )
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* 底部操作区 */}
-              <div
-                className="flex-shrink-0 px-2 py-2 space-y-0.5"
-                style={{ borderTop: '1px solid var(--t-border)' }}
-              >
-                <Link
-                  href="/settings"
-                  className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs font-medium transition-[color,background-color] duration-150 ${
-                    pathname === '/settings'
-                      ? 'bg-accent-subtle text-accent'
-                      : 'text-muted hover:text-primary hover:bg-bg-hover'
-                  }`}
-                  title={collapsed ? '设置' : undefined}
-                  aria-label={collapsed ? '设置' : undefined}
-                  aria-current={pathname === '/settings' ? 'page' : undefined}
-                >
-                  <Settings size={15} className="flex-shrink-0" aria-hidden="true" />
-                  {!collapsed && <span>设置</span>}
-                </Link>
-
-                <button
-                  onClick={toggleSidebar}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-xs text-muted hover:text-primary hover:bg-bg-hover transition-[color,background-color] duration-150"
-                  title={collapsed ? '展开侧边栏' : '折叠侧边栏'}
-                  aria-label={collapsed ? '展开侧边栏' : '折叠侧边栏'}
-                  aria-expanded={!collapsed}
-                >
-                  {collapsed ? <ChevronsRight size={15} aria-hidden="true" /> : <ChevronsLeft size={15} aria-hidden="true" />}
-                  {!collapsed && <span className="text-[11px]">折叠</span>}
-                </button>
-              </div>
-            </aside>
-
-            {/* ── 主内容区 ── */}
-            <main id="main-content" tabIndex={-1} className="flex-1 overflow-auto min-w-0">
-              {children}
-            </main>
-
-            {/* 右下角浮动按钮 */}
-            <FloatingButton projects={projects} />
-          </div>
+            <a href="#main-content" className="skip-link">跳到主要内容</a>
+            <div id="app-shell" className="app-shell">
+              <TopBar projects={projects} stats={stats} />
+              <main id="main-content" tabIndex={-1} className="app-main">
+                {children}
+              </main>
+            </div>
           </FeedbackProvider>
         </ThemeProvider>
       </body>

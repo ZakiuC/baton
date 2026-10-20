@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Plus, Edit3, Archive, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Plus, Edit3, Archive, RotateCcw, History } from 'lucide-react';
 import Link from 'next/link';
 import { Project } from '@/lib/queries/projects';
 import { Task } from '@/lib/queries/tasks';
@@ -14,10 +14,18 @@ import ProjectForm from '@/components/forms/ProjectForm';
 import ActivityStream from '@/components/dashboard/ActivityStream';
 import BlockerForm from '@/components/forms/BlockerForm';
 import Modal from '@/components/shared/Modal';
+import Drawer from '@/components/shared/Drawer';
+import Lamp from '@/components/shared/Lamp';
 import { useFeedback } from '@/components/shared/Feedback';
 import { apiRequest, getErrorMessage } from '@/lib/client-api';
 
 const STAGES = ['todo', 'in_progress', 'blocked', 'done'];
+const STAGE_TONE = {
+  todo: 'idle',
+  in_progress: 'accent',
+  blocked: 'danger',
+  done: 'done',
+} as const;
 
 export default function ProjectDetailPage() {
   const params = useParams();
@@ -32,6 +40,8 @@ export default function ProjectDetailPage() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [showEditProject, setShowEditProject] = useState(false);
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
+  const [showAllDone, setShowAllDone] = useState(false);
   const [blockerTask, setBlockerTask] = useState<Task | null>(null);
   const [error, setError] = useState('');
   const { notify } = useFeedback();
@@ -43,11 +53,11 @@ export default function ProjectDetailPage() {
       apiRequest<Task[]>(`/api/tasks?project_id=${id}&include_archived=true`),
       apiRequest<ActivityLog[]>(`/api/activity?project_id=${id}&limit=30`),
     ])
-      .then(([proj, taskList, actList]) => {
+      .then(([projectData, taskList, activityList]) => {
         setError('');
-        setProject(proj);
+        setProject(projectData);
         setTasks(taskList.filter((task) => task.stage !== 'archived'));
-        setActivities(actList);
+        setActivities(activityList);
       })
       .catch((loadError: unknown) => setError(getErrorMessage(loadError, '项目加载失败，请重试')))
       .finally(() => setLoading(false));
@@ -56,18 +66,15 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     loadData();
     const handler = () => loadData();
-    window.addEventListener('task-created', handler);
-    window.addEventListener('task-updated', handler);
-    window.addEventListener('project-updated', handler);
+    const events = ['task-created', 'task-updated', 'project-updated'];
+    events.forEach((eventName) => window.addEventListener(eventName, handler));
     return () => {
-      window.removeEventListener('task-created', handler);
-      window.removeEventListener('task-updated', handler);
-      window.removeEventListener('project-updated', handler);
+      events.forEach((eventName) => window.removeEventListener(eventName, handler));
     };
   }, [loadData]);
 
-  const handleQuickAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleQuickAdd = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!newTaskTitle.trim()) return;
     setAddingTask(true);
     setError('');
@@ -88,12 +95,15 @@ export default function ProjectDetailPage() {
   };
 
   const handleTaskDrop = async (taskId: string, targetStage: string) => {
-    const task = tasks.find((t) => t.id === taskId);
+    const task = tasks.find((item) => item.id === taskId);
     if (!task || task.stage === targetStage) return;
-    if (targetStage === 'blocked') { setBlockerTask(task); return; }
+    if (targetStage === 'blocked') {
+      setBlockerTask(task);
+      return;
+    }
     const newStage = targetStage as Task['stage'];
     const previousTasks = tasks;
-    setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, stage: newStage } : t));
+    setTasks((previous) => previous.map((item) => (item.id === taskId ? { ...item, stage: newStage } : item)));
     try {
       await apiRequest<Task>(`/api/tasks/${taskId}/stage`, {
         method: 'PATCH',
@@ -145,27 +155,18 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-5 animate-fade-in">
-        <div className="flex items-center gap-3">
-          <div className="skeleton w-7 h-7 rounded-lg" />
-          <div className="space-y-1.5">
-            <div className="skeleton h-5 w-40 rounded" />
-            <div className="skeleton h-3 w-56 rounded" />
-          </div>
+      <div className="page" aria-busy="true" aria-label="正在加载项目">
+        <div className="page-toolbar">
+          <div className="skeleton h-6 w-44" />
+          <div className="skeleton h-7 w-24" />
         </div>
-        <div className="skeleton h-1.5 w-full rounded-full" />
-        <div className="skeleton h-9 w-full rounded-lg" />
-        <div className="grid grid-cols-4 gap-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="card rounded-xl overflow-hidden p-3 space-y-2">
-              <div className="skeleton h-1 w-full rounded" />
-              <div className="skeleton h-4 w-20 rounded" />
-              {[...Array(2)].map((_, j) => (
-                <div key={j} className="card p-2.5 rounded-lg space-y-1.5">
-                  <div className="skeleton h-3 w-full rounded" />
-                  <div className="skeleton h-3 w-2/3 rounded" />
-                </div>
-              ))}
+        <div className="skeleton h-1.5 w-full" />
+        <div className="skeleton h-9 w-full" style={{ marginTop: 12 }} />
+        <div className="project-lanes" style={{ marginTop: 12 }}>
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="lane" style={{ padding: 10 }}>
+              <div className="skeleton h-4 w-16" />
+              <div className="skeleton h-16 w-full" style={{ marginTop: 8 }} />
             </div>
           ))}
         </div>
@@ -175,55 +176,61 @@ export default function ProjectDetailPage() {
 
   if (!project) {
     return (
-      <div className="p-8 animate-fade-in">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-primary mb-5 transition-colors">
-          <ArrowLeft size={13} />
+      <div className="page">
+        <Link href="/" className="topbar-text-link" style={{ marginBottom: 14 }}>
+          <ArrowLeft size={13} aria-hidden="true" />
           返回仪表盘
         </Link>
-        <div className="inline-feedback border-danger-subtle text-danger" role="alert">
+        <div className="inline-feedback" role="alert" style={{ color: 'var(--t-danger)' }}>
           {error || '项目不存在'}
         </div>
-        {error ? <button type="button" onClick={loadData} className="btn-secondary mt-4">重新加载</button> : null}
+        {error ? (
+          <button type="button" onClick={loadData} className="btn-secondary btn-sm" style={{ marginTop: 10 }}>
+            重新加载
+          </button>
+        ) : null}
       </div>
     );
   }
 
-  const getTasksByStage = (stage: string) => tasks.filter((t) => t.stage === stage);
+  const getTasksByStage = (stage: string) => tasks.filter((task) => task.stage === stage);
   const doneCount = getTasksByStage('done').length;
   const progress = calcProgress(doneCount, tasks.length);
+  const archived = project.status === 'archived';
 
   return (
-    <div className="p-6 max-w-[1440px] mx-auto space-y-5 animate-fade-in">
-      {/* 头部 */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
+    <div className="page animate-fade-in">
+      <div className="page-toolbar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <Link
             href="/"
-            className="w-7 h-7 flex items-center justify-center rounded-lg text-muted hover:text-primary hover:bg-bg-hover transition-[color,background-color] flex-shrink-0"
+            className="icon-button"
             aria-label="返回仪表盘"
           >
-            <ArrowLeft size={15} />
+            <ArrowLeft size={15} aria-hidden="true" />
           </Link>
-          <div
-            className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-            style={{ backgroundColor: project.color }}
-          />
-          <h1 className="text-base font-bold text-primary truncate">{project.name}</h1>
-          {project.status === 'archived' ? (
-            <span className="badge bg-warning-subtle text-warning">已归档</span>
-          ) : null}
-          {project.description && (
-            <span className="text-xs text-muted truncate hidden sm:block">{project.description}</span>
-          )}
+          <span aria-hidden="true" style={{ width: 8, height: 8, background: project.color, flexShrink: 0 }} />
+          <div style={{ minWidth: 0 }}>
+            <p className="page-kicker">项目 · {archived ? '已归档' : '运行中'}</p>
+            <h1 className="page-title" title={project.name} style={{ fontSize: 18, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {project.name}
+            </h1>
+            {project.description ? <p className="page-sub">{project.description}</p> : null}
+          </div>
+          {archived ? <span className="badge badge--outline" style={{ marginLeft: 4 }}>已归档</span> : null}
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <span className="text-xs text-muted font-mono mr-2">
-            {doneCount}/{tasks.length}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <span className="status-line" style={{ marginRight: 6 }}>
+            <span>完成 <span className="num">{doneCount}/{tasks.length}</span></span>
           </span>
-          {project.status === 'archived' ? (
-            <button type="button" onClick={handleRestoreProject} className="btn-primary">
-              <RotateCcw size={14} aria-hidden="true" />
+          <button type="button" className="btn-secondary btn-sm" onClick={() => setShowActivity(true)}>
+            <History size={12} aria-hidden="true" />
+            活动 {activities.length}
+          </button>
+          {archived ? (
+            <button type="button" onClick={handleRestoreProject} className="btn-primary btn-sm">
+              <RotateCcw size={13} aria-hidden="true" />
               恢复项目
             </button>
           ) : (
@@ -239,7 +246,7 @@ export default function ProjectDetailPage() {
               <button
                 type="button"
                 onClick={() => setShowArchiveConfirm(true)}
-                className="icon-button hover:text-warning"
+                className="icon-button"
                 aria-label="归档项目"
               >
                 <Archive size={14} aria-hidden="true" />
@@ -249,141 +256,126 @@ export default function ProjectDetailPage() {
         </div>
       </div>
 
-      {project.status === 'archived' ? (
-        <div className="inline-feedback border-warning-subtle bg-warning-subtle">
-          <Archive size={17} className="text-warning flex-shrink-0" aria-hidden="true" />
+      {archived ? (
+        <div className="inline-feedback" style={{ borderColor: 'var(--t-warning-subtle)', background: 'var(--t-warning-subtle)', marginBottom: 12 }}>
+          <Archive size={16} style={{ color: 'var(--t-warning)', flexShrink: 0 }} aria-hidden="true" />
           <div>
-            <p className="text-sm font-medium text-primary">这是已归档项目的只读视图</p>
-            <p className="text-xs mt-1">任务和活动记录仍完整保留；恢复项目后即可继续编辑。</p>
+            <p style={{ fontSize: 12.5, fontWeight: 600, margin: 0 }}>这是已归档项目的只读视图</p>
+            <p style={{ fontSize: 11, marginTop: 2 }}>任务和活动记录仍完整保留；恢复项目后即可继续编辑。</p>
           </div>
         </div>
       ) : null}
 
-      {error ? <div className="inline-feedback border-danger-subtle text-danger" role="alert">{error}</div> : null}
+      {error ? <div className="inline-feedback" role="alert" style={{ color: 'var(--t-danger)', marginBottom: 12 }}>{error}</div> : null}
 
-      {/* 进度条 */}
-      <div className="progress-bar">
+      <div className="progress-bar" style={{ height: 4, marginBottom: 10 }} role="progressbar" aria-label={`${project.name} 项目进度`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
         <div
           className="progress-bar-fill"
-          style={{
-            width: `${progress}%`,
-            backgroundColor: progress === 100 ? 'var(--t-success)' : project.color,
-            boxShadow: `0 0 8px ${progress === 100 ? 'rgba(16,185,129,0.4)' : `${project.color}50`}`,
-          }}
+          style={{ width: `${progress}%`, backgroundColor: progress === 100 ? 'var(--t-success)' : 'var(--t-accent)' }}
         />
       </div>
 
-      {/* 快速添加任务 */}
-      {project.status !== 'archived' ? <form onSubmit={handleQuickAdd} className="flex gap-2">
-        <label htmlFor="project-quick-task" className="sr-only">快速添加任务</label>
-        <input
-          id="project-quick-task"
-          name="project-quick-task"
-          type="text"
-          autoComplete="off"
-          value={newTaskTitle}
-          onChange={(e) => setNewTaskTitle(e.target.value)}
-          placeholder="快速添加任务，按回车创建…"
-          className="field-control flex-1 px-3 text-sm placeholder:text-muted"
-        />
-        <button
-          type="submit"
-          disabled={addingTask || !newTaskTitle.trim()}
-          className="btn-primary px-4 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <Plus size={13} />
-          添加
-        </button>
-      </form> : null}
+      {!archived ? (
+        <form onSubmit={handleQuickAdd} className="quick-add" style={{ marginBottom: 12 }}>
+          <label htmlFor="project-quick-task" className="sr-only">快速添加任务</label>
+          <input
+            id="project-quick-task"
+            name="project-quick-task"
+            type="text"
+            autoComplete="off"
+            value={newTaskTitle}
+            onChange={(event) => setNewTaskTitle(event.target.value)}
+            placeholder="快速添加任务，按回车创建…"
+            className="field-control"
+            style={{ flex: 1 }}
+          />
+          <button
+            type="submit"
+            disabled={addingTask || !newTaskTitle.trim()}
+            className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ flexShrink: 0 }}
+          >
+            <Plus size={13} aria-hidden="true" />
+            添加
+          </button>
+        </form>
+      ) : null}
 
-      {/* 看板 + 活动流 */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* 看板四列 */}
-        <div className="lg:col-span-3">
-          <div className="overflow-x-auto pb-2">
-          <div className="grid grid-cols-[repeat(4,minmax(240px,1fr))] gap-3 min-w-[1000px]">
+      <div className="project-lanes-wrap" style={{ padding: 0 }}>
+          <div className="project-lanes">
             {STAGES.map((stage) => {
               const config = STAGE_CONFIG[stage];
               const stageTasks = getTasksByStage(stage);
+              const visibleTasks = stage === 'done' && !showAllDone ? stageTasks.slice(0, 3) : stageTasks;
+              const hiddenDone = stage === 'done' && !showAllDone ? Math.max(0, stageTasks.length - 3) : 0;
               return (
-                <div
+                <section
                   key={stage}
-                  className="card rounded-xl overflow-hidden min-h-[180px] flex flex-col"
-                  onDragOver={project.status === 'archived' ? undefined : (e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    if (project.status === 'archived') return;
-                    e.preventDefault();
-                    const taskId = e.dataTransfer.getData('text/plain');
+                  className={`lane lane--${stage} ${archived ? 'lane--archived' : ''} ${stageTasks.length === 0 ? 'lane--empty' : ''}`}
+                  aria-label={config.label}
+                  onDragOver={archived ? undefined : (event) => event.preventDefault()}
+                  onDrop={archived ? undefined : (event) => {
+                    event.preventDefault();
+                    const taskId = event.dataTransfer.getData('text/plain');
                     if (taskId) handleTaskDrop(taskId, stage);
                   }}
                 >
-                  {/* 列顶部色条 */}
-                  <div
-                    className="h-[3px] flex-shrink-0 opacity-80"
-                    style={{ backgroundColor: config.color }}
-                  />
-                  {/* 列头 */}
-                  <div className="flex items-center gap-2 px-3 py-2.5 flex-shrink-0">
-                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }} />
-                    <span className="text-xs font-semibold text-primary">{config.label}</span>
-                    <span
-                      className="ml-auto text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-full"
-                      style={{ color: config.color, background: `${config.color}18` }}
-                    >
-                      {stageTasks.length}
-                    </span>
-                  </div>
-                  <div className="border-t border-border mx-2 flex-shrink-0" />
-                  {/* 任务列表 */}
-                  <div className="flex-1 p-2 space-y-1.5 overflow-y-auto">
-                    {stageTasks.map((task) => (
+                  <header className="lane-head">
+                    <Lamp tone={stage === 'blocked' && stageTasks.length === 0 ? 'idle' : STAGE_TONE[stage as keyof typeof STAGE_TONE] || 'idle'} />
+                    <h2>{config.label}</h2>
+                    <span className="lane-count">{stageTasks.length}</span>
+                  </header>
+                  <div className="lane-list">
+                    {visibleTasks.map((task) => (
                       <div
                         key={task.id}
-                        draggable={project.status !== 'archived'}
-                        onDragStart={(e) => e.dataTransfer.setData('text/plain', task.id)}
+                        draggable={!archived}
+                        onDragStart={(event) => event.dataTransfer.setData('text/plain', task.id)}
                       >
                         <TaskCard
                           task={task}
                           compact
-                          onClick={project.status === 'archived' ? undefined : () => setSelectedTaskId(task.id)}
+                          muted={stage === 'done'}
+                          onClick={archived ? undefined : () => setSelectedTaskId(task.id)}
                         />
                       </div>
                     ))}
-                    {stageTasks.length === 0 && (
-                      <div
-                        className="h-16 flex items-center justify-center rounded-lg border border-dashed text-[11px] text-muted"
-                        style={{ borderColor: 'var(--t-border)' }}
-                      >
-                        拖拽任务到此处
-                      </div>
-                    )}
+                    {hiddenDone > 0 ? (
+                      <button type="button" className="lane-more" onClick={() => setShowAllDone(true)} aria-expanded={false}>
+                        展开其余 {hiddenDone} 项
+                      </button>
+                    ) : null}
+                    {stage === 'done' && showAllDone && stageTasks.length > 3 ? (
+                      <button type="button" className="lane-more" onClick={() => setShowAllDone(false)} aria-expanded={true}>
+                        收起已完成
+                      </button>
+                    ) : null}
+                    {stageTasks.length === 0 && !archived ? (
+                      <div className="lane-empty">拖拽任务到此处</div>
+                    ) : null}
                   </div>
-                </div>
+                </section>
               );
             })}
           </div>
-          </div>
-        </div>
-        {/* 活动流 */}
-        <div className="lg:col-span-1">
-          <ActivityStream activities={activities} />
-        </div>
       </div>
 
-      {selectedTaskId && (
-        <TaskDetail
-          taskId={selectedTaskId}
-          onClose={() => setSelectedTaskId(null)}
-        />
-      )}
-      {showEditProject && (
+      {selectedTaskId ? (
+        <TaskDetail taskId={selectedTaskId} onClose={() => setSelectedTaskId(null)} />
+      ) : null}
+      {showActivity ? (
+        <Drawer open onClose={() => setShowActivity(false)} title="最近活动">
+          <ActivityStream activities={activities} />
+        </Drawer>
+      ) : null}
+      {showEditProject ? (
         <ProjectForm
           project={project}
           onClose={() => setShowEditProject(false)}
           onCreated={() => setShowEditProject(false)}
         />
-      )}
-      {blockerTask && (
+      ) : null}
+      {blockerTask ? (
         <BlockerForm
           taskId={blockerTask.id}
           taskTitle={blockerTask.title}
@@ -393,24 +385,24 @@ export default function ProjectDetailPage() {
             notify('已记录阻塞原因', 'success');
           }}
         />
-      )}
-      {showArchiveConfirm && (
+      ) : null}
+      {showArchiveConfirm ? (
         <Modal open onClose={() => setShowArchiveConfirm(false)} title="归档项目">
-          <div className="space-y-4">
-            <div className="inline-feedback border-warning-subtle bg-warning-subtle">
-              <Archive size={18} className="text-warning flex-shrink-0" aria-hidden="true" />
+          <div className="stack">
+            <div className="inline-feedback" style={{ borderColor: 'var(--t-warning-subtle)', background: 'var(--t-warning-subtle)' }}>
+              <Archive size={17} style={{ color: 'var(--t-warning)', flexShrink: 0 }} aria-hidden="true" />
               <div>
-                <p className="text-sm font-medium text-primary">归档“{project.name}”？</p>
-                <p className="text-xs mt-1">项目、任务、阻塞原因和活动记录都不会删除，可随时恢复。</p>
+                <p style={{ fontSize: 12.5, fontWeight: 600, margin: 0 }}>归档“{project.name}”？</p>
+                <p style={{ fontSize: 11, marginTop: 2 }}>项目、任务、阻塞原因和活动记录都不会删除，可随时恢复。</p>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button type="button" className="btn-secondary" onClick={() => setShowArchiveConfirm(false)}>取消</button>
               <button type="button" className="btn-primary" onClick={handleArchiveProject}>确认归档</button>
             </div>
           </div>
         </Modal>
-      )}
+      ) : null}
     </div>
   );
 }

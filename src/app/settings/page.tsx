@@ -1,7 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
-import { Archive, ArrowLeft, Monitor, Power, Palette, Check, Sun, Moon, ChevronDown, ChevronRight, Info, LoaderCircle, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  ArrowLeft, Check, ChevronDown, ChevronRight, Info, LoaderCircle,
+  Monitor, Power, RotateCcw, Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useTheme } from '@/components/shared/ThemeProvider';
 import { allThemes, Theme } from '@/lib/themes';
@@ -24,12 +27,9 @@ export default function SettingsPage() {
   const [archiveLoading, setArchiveLoading] = useState(true);
   const [archiveError, setArchiveError] = useState('');
   const [restoringId, setRestoringId] = useState<string | null>(null);
-  /** 待永久删除的项目（打开确认弹窗用）；null 表示弹窗关闭。 */
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
-  /** 确认弹窗里必须原样输入的确认短语。 */
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
-  /** 该项目的任务数，用于在确认弹窗里把后果说清楚。 */
   const [deleteTaskCount, setDeleteTaskCount] = useState<number | null>(null);
   const isElectron = useIsElectron();
   const canUseDOM = useCanUseDOM();
@@ -41,12 +41,10 @@ export default function SettingsPage() {
     [archivedProjects],
   );
 
-  // 默认主题单独渲染在列表最上方，分组里必须按 id 排除它。
-  // 只按 mode 过滤是不够的：默认主题的 mode 会随设计变化（曾为 dark，现为 light），
-  // 一旦它和某个分组的 mode 相同，就会在设置页里重复出现两次。
-  const groupedThemes = allThemes.filter(t => t.id !== allThemes[0].id);
-  const darkThemes = groupedThemes.filter(t => t.mode === 'dark');
-  const lightThemes = groupedThemes.filter(t => t.mode === 'light');
+  // 默认主题单独渲染在列表最上方，分组按 id 排除它，避免重复项。
+  const defaultTheme = allThemes[0];
+  const machineLight = allThemes.find((theme) => theme.id === 'machine-light') || null;
+  const otherThemes = allThemes.filter((theme) => theme.id !== defaultTheme.id && theme.id !== 'machine-light');
   const loading = !canUseDOM || (isElectron && settingsLoading);
   const displayVersion = useAppVersion();
 
@@ -101,6 +99,7 @@ export default function SettingsPage() {
       setSavingSetting(null);
     }
   };
+
   const toggleMinimizeToTray = async () => {
     const api = typeof window === 'undefined' ? undefined : window.electronAPI;
     if (!isElectron || !api || savingSetting) return;
@@ -143,7 +142,6 @@ export default function SettingsPage() {
     }
   };
 
-  /** 打开永久删除确认弹窗，并先查出该项目下有多少任务会被一并删除。 */
   const openDeleteDialog = async (project: Project) => {
     setProjectToDelete(project);
     setDeleteConfirmText('');
@@ -152,15 +150,10 @@ export default function SettingsPage() {
       const tasks = await apiRequest<Task[]>(`/api/tasks?project_id=${project.id}&include_archived=true`);
       setDeleteTaskCount(tasks.length);
     } catch {
-      // 查不到数量不影响删除，弹窗里会退化成不显示数量
       setDeleteTaskCount(null);
     }
   };
 
-  /**
-   * 永久删除已归档项目。不可逆：项目连同其任务、阻塞记录一并从数据库移除，
-   * 活动流里会保留一条「永久删除了项目」的记录（project_id 置空）。
-   */
   const deleteProjectPermanently = async (project: Project) => {
     setDeletingProjectId(project.id);
     try {
@@ -179,7 +172,8 @@ export default function SettingsPage() {
     }
   };
 
-  const restoreTask = async (task: Task) => {    setRestoringId(task.id);
+  const restoreTask = async (task: Task) => {
+    setRestoringId(task.id);
     try {
       await apiRequest<Task>(`/api/tasks/${task.id}`, {
         method: 'PUT',
@@ -198,278 +192,262 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-5 animate-fade-in max-w-[680px] mx-auto">
-        <div className="flex items-center gap-3">
-          <div className="skeleton w-7 h-7 rounded-lg" />
-          <div className="space-y-1.5">
-            <div className="skeleton h-4 w-16 rounded" />
-            <div className="skeleton h-3 w-28 rounded" />
-          </div>
+      <div className="settings-page" aria-busy="true" aria-label="正在加载设置">
+        <div className="page-toolbar">
+          <div className="skeleton h-5 w-20" />
+          <div className="skeleton h-6 w-28" />
         </div>
-        <div className="card p-4 space-y-3">
-          {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-10 rounded-lg" />)}
+        <div className="panel" style={{ padding: 12 }}>
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="skeleton h-11" style={{ marginTop: index === 0 ? 0 : 6 }} />
+          ))}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-5 max-w-[720px] mx-auto space-y-5 animate-fade-in">
-      {/* 头部 */}
-      <div className="flex items-center gap-3">
-        <Link
-          href="/"
-          className="icon-button"
-          aria-label="返回仪表盘"
-        >
-          <ArrowLeft size={15} aria-hidden="true" />
-        </Link>
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-primary">设置</h1>
-          <p className="text-xs text-muted mt-0.5">应用偏好与主题</p>
+    <div className="settings-page animate-fade-in">
+      <div className="page-toolbar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link href="/" className="icon-button" aria-label="返回仪表盘">
+            <ArrowLeft size={15} aria-hidden="true" />
+          </Link>
+          <div>
+            <h1 className="page-title" style={{ fontSize: 17 }}>设置</h1>
+            <p className="page-sub">应用偏好、主题与归档</p>
+          </div>
         </div>
+        <span className="micro-mono">v{displayVersion}</span>
       </div>
 
-      {/* 主题选择 */}
-      <div className="card overflow-hidden">
-        {/* 头部 — 始终可见，点击展开/折叠 */}
-        <button
-          onClick={() => setThemeExpanded((v) => !v)}
-          className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-bg-hover transition-colors text-left"
-          aria-expanded={themeExpanded}
-          aria-controls="theme-options"
-        >
-          <div className="w-7 h-7 rounded-lg bg-accent-subtler flex items-center justify-center flex-shrink-0">
-            <Palette size={14} className="text-accent" aria-hidden="true" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-primary">主题方案</p>
-            <p className="text-xs text-muted mt-0.5 truncate">{currentTheme.name}</p>
-          </div>
-          {/* 当前主题色块预览 */}
-          <div className="flex gap-0.5 rounded overflow-hidden border border-border flex-shrink-0" aria-hidden="true">
-            {[
-              currentTheme.vars['--t-surface'],
-              currentTheme.vars['--t-card'],
-              currentTheme.vars['--t-accent'],
-              currentTheme.vars['--t-primary'],
-              currentTheme.vars['--t-danger'],
-            ].map((c, i) => (
-              <span key={i} className="w-4 h-4 block" style={{ backgroundColor: c }} />
-            ))}
-          </div>
-          <ChevronDown
-            size={15}
-            className="text-muted flex-shrink-0 transition-transform duration-200"
-            style={{ transform: themeExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
-            aria-hidden="true"
-          />
-        </button>
-
-        {/* 展开区域 */}
-        {themeExpanded && (
-          <div id="theme-options" className="border-t border-border px-3 pb-3 pt-2">
-            {/* 默认 */}
-            <ThemeRow t={allThemes[0]} active={currentTheme.id === allThemes[0].id} onClick={selectTheme} />
-
-            {/* 暗色系 */}
-            <div className="flex items-center gap-1.5 mt-3 mb-1.5 px-1">
-              <Moon size={11} className="text-muted" aria-hidden="true" />
-              <span className="text-[11px] font-semibold text-muted">暗色主题</span>
-            </div>
-            <div className="space-y-0.5">
-              {darkThemes.map(t => (
-                <ThemeRow key={t.id} t={t} active={currentTheme.id === t.id} onClick={selectTheme} />
+      <div className="stack">
+        {/* 主题 */}
+        <section className="panel" aria-labelledby="theme-heading">
+          <button
+            type="button"
+            onClick={() => setThemeExpanded((value) => !value)}
+            className="panel-head"
+            style={{ width: '100%', border: 0, background: 'transparent', cursor: 'pointer', textAlign: 'left' }}
+            aria-expanded={themeExpanded}
+            aria-controls="theme-options"
+          >
+            <span className="panel-mark" aria-hidden="true" />
+            <h2 id="theme-heading" className="panel-title">主题方案</h2>
+            <span className="panel-index">{currentTheme.name}</span>
+            <span className="theme-swatches" aria-hidden="true" style={{ marginLeft: 'auto' }}>
+              {[
+                currentTheme.vars['--t-surface'],
+                currentTheme.vars['--t-card'],
+                currentTheme.vars['--t-accent'],
+                currentTheme.vars['--t-primary'],
+                currentTheme.vars['--t-danger'],
+              ].map((color, index) => (
+                <span key={index} style={{ backgroundColor: color }} />
               ))}
-            </div>
-
-            {/* 亮色系 */}
-            <div className="flex items-center gap-1.5 mt-3 mb-1.5 px-1">
-              <Sun size={11} className="text-muted" aria-hidden="true" />
-              <span className="text-[11px] font-semibold text-muted">亮色主题</span>
-            </div>
-            <div className="space-y-0.5">
-              {lightThemes.map(t => (
-                <ThemeRow key={t.id} t={t} active={currentTheme.id === t.id} onClick={selectTheme} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Electron 设置 */}
-      <div className="space-y-1.5">
-        <SettingToggle
-          icon={<Power size={14} className="text-accent" aria-hidden="true" />}
-          label="开机自启"
-          desc={isElectron ? '系统启动时自动运行' : '右键托盘图标管理'}
-          enabled={autoLaunch}
-          onChange={toggleAutoLaunch}
-          disabled={!isElectron}
-          busy={savingSetting === 'autoLaunch'}
-        />
-        <SettingToggle
-          icon={<Monitor size={14} className="text-accent" aria-hidden="true" />}
-          label="关闭时最小化到托盘"
-          desc={isElectron ? '关闭窗口时隐藏到托盘' : '应用默认运行在托盘中'}
-          enabled={minimizeToTray}
-          onChange={toggleMinimizeToTray}
-          disabled={!isElectron}
-          busy={savingSetting === 'tray'}
-        />
-      </div>
-
-      {!isElectron && (
-        <div className="card flex items-start gap-3 p-4 border-border">
-          <Info size={15} className="mt-0.5 flex-shrink-0 text-accent" aria-hidden="true" />
-          <p className="text-xs text-muted leading-relaxed">
-            开机自启与托盘设置仅在桌面版（Electron）中生效
-          </p>
-        </div>
-      )}
-
-      <section className="card overflow-hidden" aria-labelledby="archive-management-title">
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
-          <div className="w-7 h-7 rounded-lg bg-warning-subtle flex items-center justify-center flex-shrink-0">
-            <Archive size={14} className="text-warning" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 id="archive-management-title" className="text-sm font-semibold text-primary">归档管理</h2>
-            <p className="text-xs text-muted mt-0.5">
-              归档只隐藏数据，可随时恢复；已归档的项目也可以永久删除（不可撤销）。
-            </p>
-          </div>
-          {!archiveLoading ? (
-            <span className="badge bg-muted-subtle text-muted">
-              {archivedProjects.length + archivedTasks.length} 项
             </span>
-          ) : null}
-        </div>
+            <ChevronDown
+              size={14}
+              aria-hidden="true"
+              style={{ transform: themeExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.16s ease', flexShrink: 0 }}
+            />
+          </button>
 
-        <div className="p-3 space-y-3">
-          {archiveError ? (
-            <div className="inline-feedback border-danger-subtle text-danger" role="alert">
-              <p className="flex-1 text-xs">{archiveError}</p>
-              <button type="button" className="btn-secondary" onClick={() => void loadArchivedItems()}>重试</button>
+          {themeExpanded ? (
+            <div id="theme-options" style={{ padding: '4px 8px 8px' }}>
+              <div className="section-label" style={{ margin: '4px 4px 2px' }}>本机</div>
+              <ThemeRow theme={defaultTheme} active={currentTheme.id === defaultTheme.id} onClick={selectTheme} isDefault />
+              {machineLight ? (
+                <ThemeRow theme={machineLight} active={currentTheme.id === machineLight.id} onClick={selectTheme} />
+              ) : null}
+
+              <div className="section-label" style={{ margin: '12px 4px 2px' }}>其他主题</div>
+              {otherThemes.map((theme) => (
+                <ThemeRow key={theme.id} theme={theme} active={currentTheme.id === theme.id} onClick={selectTheme} />
+              ))}
             </div>
           ) : null}
+        </section>
 
-          {archiveLoading ? (
-            <div className="space-y-2" aria-label="正在加载归档数据">
-              <div className="skeleton h-11 rounded-lg" />
-              <div className="skeleton h-11 rounded-lg" />
+        {/* 桌面行为 */}
+        <section className="panel" aria-labelledby="desktop-heading">
+          <div className="panel-head">
+            <span className="panel-mark" aria-hidden="true" />
+            <h2 id="desktop-heading" className="panel-title">桌面行为</h2>
+            <span className="panel-index">{isElectron ? '本机生效' : '仅桌面版'}</span>
+          </div>
+          <SettingToggle
+            icon={<Power size={14} />}
+            label="开机自启"
+            desc={isElectron ? '系统启动时自动运行' : '右键托盘图标管理'}
+            enabled={autoLaunch}
+            onChange={() => void toggleAutoLaunch()}
+            disabled={!isElectron}
+            busy={savingSetting === 'autoLaunch'}
+          />
+          <SettingToggle
+            icon={<Monitor size={14} />}
+            label="关闭时最小化到托盘"
+            desc={isElectron ? '关闭窗口时隐藏到托盘' : '应用默认运行在托盘中'}
+            enabled={minimizeToTray}
+            onChange={() => void toggleMinimizeToTray()}
+            disabled={!isElectron}
+            busy={savingSetting === 'tray'}
+          />
+        </section>
+
+        {!isElectron ? (
+          <div className="inline-feedback">
+            <Info size={14} style={{ color: 'var(--t-accent)', flexShrink: 0, marginTop: 1 }} aria-hidden="true" />
+            <p style={{ margin: 0 }}>开机自启与托盘设置仅在桌面版（Electron）中生效。</p>
+          </div>
+        ) : null}
+
+        {/* 本地数据 */}
+        <section className="panel" aria-labelledby="data-heading">
+          <div className="panel-head">
+            <span className="panel-mark" aria-hidden="true" />
+            <h2 id="data-heading" className="panel-title">本地数据</h2>
+            <span className="panel-index">不联网 · 不上传</span>
+          </div>
+          <div className="setting-row">
+            <div className="setting-row-main">
+              <p className="setting-row-title">数据位置</p>
+              <p className="setting-row-desc" style={{ fontFamily: 'var(--font-code)' }}>%APPDATA%\baton\data\tracker.db</p>
             </div>
-          ) : archivedProjects.length === 0 && archivedTasks.length === 0 ? (
-            <p className="py-5 text-center text-xs text-muted">暂无归档项目或任务</p>
-          ) : (
-            <>
-              {archivedProjects.length > 0 ? (
-                <div>
-                  <h3 className="px-1 pb-1.5 text-[11px] font-semibold text-muted">项目</h3>
-                  <div className="space-y-1">
+          </div>
+          <div className="setting-row">
+            <div className="setting-row-main">
+              <p className="setting-row-title">备份提醒</p>
+              <p className="setting-row-desc">当前版本不会自动轮转备份；建议定期把 tracker.db 与 .bak 复制到别处。</p>
+            </div>
+          </div>
+        </section>
+
+        {/* 归档管理 */}
+        <section className="panel" aria-labelledby="archive-management-title">
+          <div className="panel-head">
+            <span className="panel-mark" aria-hidden="true" />
+            <h2 id="archive-management-title" className="panel-title">归档管理</h2>
+            <span className="panel-index">归档只隐藏数据，可随时恢复；已归档项目也可永久删除（不可撤销）</span>
+            {!archiveLoading ? (
+              <span className="badge badge--outline" style={{ marginLeft: 'auto' }}>
+                {archivedProjects.length + archivedTasks.length} 项
+              </span>
+            ) : null}
+          </div>
+
+          <div style={{ padding: '4px 8px 8px' }}>
+            {archiveError ? (
+              <div className="inline-feedback" role="alert" style={{ color: 'var(--t-danger)', margin: '6px 0' }}>
+                <p style={{ flex: 1, margin: 0 }}>{archiveError}</p>
+                <button type="button" className="btn-secondary btn-sm" onClick={() => void loadArchivedItems()}>重试</button>
+              </div>
+            ) : null}
+
+            {archiveLoading ? (
+              <div aria-label="正在加载归档数据" style={{ padding: 4 }}>
+                <div className="skeleton h-11" />
+                <div className="skeleton h-11" style={{ marginTop: 5 }} />
+              </div>
+            ) : archivedProjects.length === 0 && archivedTasks.length === 0 ? (
+              <p style={{ padding: '16px 4px', textAlign: 'center', fontSize: 11, color: 'var(--t-muted)', margin: 0 }}>
+                暂无归档项目或任务
+              </p>
+            ) : (
+              <>
+                {archivedProjects.length > 0 ? (
+                  <div>
+                    <h3 className="section-label" style={{ margin: '6px 4px' }}>项目</h3>
                     {archivedProjects.map((project) => (
-                      <div key={project.id} className="flex items-center gap-3 rounded-lg border border-border bg-bg-subtler px-3 py-2.5">
-                        <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: project.color }} aria-hidden="true" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-primary">{project.name}</p>
-                          <p className="mt-0.5 text-[11px] text-muted">可恢复，也可永久删除</p>
+                      <div key={project.id} className="rounded-lg archive-row" style={{ borderRadius: 3 }}>
+                        <span aria-hidden="true" style={{ width: 6, height: 6, background: project.color, flexShrink: 0 }} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</p>
+                          <p className="micro" style={{ margin: '1px 0 0' }}>可恢复，也可永久删除</p>
                         </div>
                         <button
                           type="button"
-                          className="btn-secondary"
+                          className="btn-secondary btn-sm"
                           disabled={restoringId !== null}
                           onClick={() => void restoreProject(project)}
                         >
                           {restoringId === project.id
-                            ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
-                            : <RotateCcw size={13} aria-hidden="true" />}
+                            ? <LoaderCircle size={12} className="animate-spin" aria-hidden="true" />
+                            : <RotateCcw size={12} aria-hidden="true" />}
                           恢复
                         </button>
                         <button
                           type="button"
-                          className="btn-secondary text-danger"
+                          className="btn-secondary btn-sm"
+                          style={{ color: 'var(--t-danger)' }}
                           disabled={deletingProjectId !== null || restoringId !== null}
                           onClick={() => void openDeleteDialog(project)}
                           aria-label={`永久删除项目：${project.name}`}
                         >
                           {deletingProjectId === project.id
-                            ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
-                            : <Trash2 size={13} aria-hidden="true" />}
+                            ? <LoaderCircle size={12} className="animate-spin" aria-hidden="true" />
+                            : <Trash2 size={12} aria-hidden="true" />}
                           永久删除
                         </button>
                       </div>
                     ))}
                   </div>
-                </div>
-              ) : null}
+                ) : null}
 
-              {archivedTasks.length > 0 ? (
-                <div>
-                  <h3 className="px-1 pb-1.5 text-[11px] font-semibold text-muted">任务</h3>
-                  <div className="space-y-1">
+                {archivedTasks.length > 0 ? (
+                  <div>
+                    <h3 className="section-label" style={{ margin: '10px 4px 6px' }}>任务</h3>
                     {archivedTasks.map((task) => {
                       const projectArchived = archivedProjectIds.has(task.project_id);
                       return (
-                        <div key={task.id} className="flex items-center gap-3 rounded-lg border border-border bg-bg-subtler px-3 py-2.5">
-                          <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: task.project_color }} aria-hidden="true" />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium text-primary">{task.title}</p>
-                            <p className="mt-0.5 truncate text-[11px] text-muted">
+                        <div key={task.id} className="rounded-lg archive-row" style={{ borderRadius: 3 }}>
+                          <span aria-hidden="true" style={{ width: 5, height: 5, background: task.project_color, flexShrink: 0 }} />
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <p style={{ margin: 0, fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</p>
+                            <p className="micro" style={{ margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {projectArchived ? '请先恢复所属项目' : task.project_name}
                             </p>
                           </div>
                           <button
                             type="button"
-                            className="btn-secondary"
+                            className="btn-secondary btn-sm"
                             disabled={restoringId !== null || projectArchived}
                             title={projectArchived ? '请先恢复所属项目' : '恢复到待办'}
                             onClick={() => void restoreTask(task)}
                           >
                             {restoringId === task.id
-                              ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
-                              : <RotateCcw size={13} aria-hidden="true" />}
+                              ? <LoaderCircle size={12} className="animate-spin" aria-hidden="true" />
+                              : <RotateCcw size={12} aria-hidden="true" />}
                             恢复
                           </button>
                         </div>
                       );
                     })}
                   </div>
-                </div>
-              ) : null}
-            </>
-          )}
-        </div>
-      </section>
+                ) : null}
+              </>
+            )}
+          </div>
+        </section>
 
-      {/* 版本信息 → 关于页 */}
-      <Link
-        href="/about"
-        className="card interactive-card p-4 flex items-center gap-3"
-        aria-label={`关于 ${APP_NAME_FULL}，当前版本 v${displayVersion}`}
-      >
-        {/* 与应用图标保持一致，而不是用图标库里的近似字形 */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/icon.svg"
-          alt=""
-          width={32}
-          height={32}
-          className="w-8 h-8 rounded-lg flex-shrink-0"
-          aria-hidden="true"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-primary">{APP_NAME_FULL}</p>
-          <p className="text-xs text-muted mt-0.5">
-            v{displayVersion} — {APP_TAGLINE}
-          </p>
-        </div>
-        <ChevronRight size={15} className="text-muted flex-shrink-0" aria-hidden="true" />
-      </Link>
+        {/* 关于 */}
+        <Link
+          href="/about"
+          className="panel interactive-card"
+          style={{ padding: 12, display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}
+          aria-label={`关于 ${APP_NAME_FULL}，当前版本 v${displayVersion}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/icon.svg" alt="" width={28} height={28} style={{ borderRadius: 4, flexShrink: 0 }} aria-hidden="true" />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <p style={{ margin: 0, fontSize: 12.5, fontWeight: 600 }}>{APP_NAME_FULL}</p>
+            <p className="micro" style={{ margin: '1px 0 0' }}>v{displayVersion} — {APP_TAGLINE}</p>
+          </div>
+          <ChevronRight size={14} style={{ color: 'var(--t-muted)', flexShrink: 0 }} aria-hidden="true" />
+        </Link>
+      </div>
 
-      {/*
-        永久删除确认弹窗。删除不可逆，因此要求把项目名原样输入一遍，
-        而不是点一下「确定」就删——这是不可逆操作的标准做法。
-      */}
       <Modal
         open={projectToDelete !== null}
         onClose={() => {
@@ -479,34 +457,31 @@ export default function SettingsPage() {
         title="永久删除项目"
       >
         {projectToDelete ? (
-          <div className="space-y-4">
-            <div
-              className="rounded-lg border px-3 py-2.5"
-              style={{ borderColor: 'var(--t-danger)', background: 'var(--t-danger-light)' }}
-            >
-              <p className="text-xs text-danger font-medium">此操作不可撤销，数据无法找回。</p>
+          <div className="stack">
+            <div className="inline-feedback" style={{ borderColor: 'var(--t-danger)', background: 'var(--t-danger-light)', color: 'var(--t-danger)' }}>
+              <p style={{ margin: 0, fontWeight: 600 }}>此操作不可撤销，数据无法找回。</p>
             </div>
 
-            <ul className="space-y-1.5 text-xs text-muted">
-              <li>· 项目“{projectToDelete.name}”本身会被删除</li>
+            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11.5, color: 'var(--t-muted)', lineHeight: 1.8 }}>
+              <li>项目“{projectToDelete.name}”本身会被删除</li>
               <li>
-                · 该项目下的
+                该项目下的
                 {deleteTaskCount === null ? '全部任务' : ` ${deleteTaskCount} 个任务`}
                 会一并删除
               </li>
-              <li>· 这些任务的阻塞记录会一并删除</li>
-              <li>· 活动记录会保留，并留下一条“永久删除了项目”的历史</li>
+              <li>这些任务的阻塞记录会一并删除</li>
+              <li>活动记录会保留，并留下一条“永久删除了项目”的历史</li>
             </ul>
 
             <div>
-              <label htmlFor="delete-project-confirm" className="mb-1.5 block text-xs font-medium text-primary">
-                请输入项目名称以确认：<span className="font-mono text-danger">{projectToDelete.name}</span>
+              <label htmlFor="delete-project-confirm" className="field-label">
+                请输入项目名称以确认：<span className="num" style={{ color: 'var(--t-danger)' }}>{projectToDelete.name}</span>
               </label>
               <input
                 id="delete-project-confirm"
                 type="text"
                 autoComplete="off"
-                className="field-control w-full px-3 text-sm"
+                className="field-control"
                 value={deleteConfirmText}
                 onChange={(event) => setDeleteConfirmText(event.target.value)}
                 placeholder={projectToDelete.name}
@@ -514,23 +489,17 @@ export default function SettingsPage() {
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                className="btn-secondary"
-                disabled={deletingProjectId !== null}
-                onClick={() => setProjectToDelete(null)}
-              >
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" className="btn-secondary" disabled={deletingProjectId !== null} onClick={() => setProjectToDelete(null)}>
                 取消
               </button>
               <button
                 type="button"
-                className="btn-primary"
-                style={{ background: 'var(--t-danger)' }}
+                className="btn-danger"
                 disabled={deleteConfirmText.trim() !== projectToDelete.name || deletingProjectId !== null}
                 onClick={() => void deleteProjectPermanently(projectToDelete)}
               >
-                {deletingProjectId ? <LoaderCircle size={13} className="animate-spin" aria-hidden="true" /> : null}
+                {deletingProjectId ? <LoaderCircle size={12} className="animate-spin" aria-hidden="true" /> : null}
                 永久删除
               </button>
             </div>
@@ -541,33 +510,34 @@ export default function SettingsPage() {
   );
 }
 
-/* ── 子组件 ── */
-
-function ThemeRow({ t, active, onClick }: { t: Theme; active: boolean; onClick: (id: string) => void }) {
-  const v = t.vars;
+function ThemeRow({ theme, active, onClick, isDefault }: {
+  theme: Theme;
+  active: boolean;
+  onClick: (id: string) => void;
+  isDefault?: boolean;
+}) {
+  const vars = theme.vars;
   return (
     <button
-      onClick={() => onClick(t.id)}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-[color,background-color,box-shadow] duration-150 ${
-        active
-          ? 'bg-accent-subtle ring-1 ring-inset ring-accent'
-          : 'hover:bg-bg-hover'
-      }`}
+      type="button"
+      onClick={() => onClick(theme.id)}
+      className="theme-row"
       aria-pressed={active}
     >
-      {/* 色块预览（5个色） */}
-      <div className="flex gap-0.5 flex-shrink-0 rounded-md overflow-hidden border border-border" aria-hidden="true">
-        {[v['--t-surface'], v['--t-card'], v['--t-accent'], v['--t-primary'], v['--t-danger']].map((c, i) => (
-          <span key={i} className="w-5 h-5 block" style={{ backgroundColor: c }} />
-        ))}
-      </div>
-      <span className={`text-xs flex-1 text-left font-medium ${active ? 'text-accent' : 'text-primary'}`}>
-        {t.name}
+      <span
+        className="theme-preview"
+        aria-hidden="true"
+        style={{
+          background: vars['--t-surface'],
+          borderColor: vars['--t-border'],
+        }}
+      >
+        <i style={{ background: vars['--t-card'], borderColor: vars['--t-border-mid'] }} />
+        <b style={{ background: vars['--t-accent'] }} />
       </span>
-      {active
-        ? <Check size={13} className="text-accent flex-shrink-0" aria-hidden="true" />
-        : <span className="text-[11px] text-muted flex-shrink-0">{t.mode === 'dark' ? '暗' : '亮'}</span>
-      }
+      <span className="theme-name">{theme.name}</span>
+      {isDefault ? <span className="badge badge--outline">默认</span> : null}
+      {active ? <Check size={12} style={{ color: 'var(--t-accent)', flexShrink: 0 }} aria-hidden="true" /> : null}
     </button>
   );
 }
@@ -585,38 +555,30 @@ function SettingToggle({ icon, label, desc, enabled, onChange, disabled, busy }:
   const descriptionId = useId();
 
   return (
-    <div className={`card p-4 flex items-center justify-between ${disabled ? 'opacity-60' : ''}`}>
-      <div className="flex items-center gap-3">
-        <div className="w-7 h-7 rounded-lg bg-accent-subtler flex items-center justify-center flex-shrink-0" aria-hidden="true">
-          {icon}
-        </div>
-        <div>
-          <p id={labelId} className="text-sm font-medium text-primary">{label}</p>
-          <p id={descriptionId} className="text-xs text-muted mt-0.5">{desc}</p>
-        </div>
+    <div className="setting-row">
+      <span aria-hidden="true" style={{ color: 'var(--t-muted)', flexShrink: 0 }}>{icon}</span>
+      <div className="setting-row-main">
+        <p id={labelId} className="setting-row-title">{label}</p>
+        <p id={descriptionId} className="setting-row-desc">{desc}</p>
       </div>
       <button
+        type="button"
         onClick={onChange}
         disabled={disabled || busy}
         role="switch"
         aria-checked={enabled}
         aria-labelledby={labelId}
         aria-describedby={descriptionId}
-        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${
-          disabled ? 'cursor-not-allowed' : 'cursor-pointer'
-        } ${enabled ? 'bg-accent' : 'bg-bg-light'}`}
-        style={{ boxShadow: enabled ? '0 0 0 1px var(--t-accent)' : '0 0 0 1px var(--t-border-mid)' }}
+        className="switch"
       >
         {busy ? (
-          <LoaderCircle size={12} className="absolute left-3 animate-spin text-accent-foreground" aria-hidden="true" />
-        ) : (
-          <span
-            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
-              enabled ? 'translate-x-[18px]' : 'translate-x-[3px]'
-            }`}
+          <LoaderCircle
+            size={10}
+            className="animate-spin"
             aria-hidden="true"
+            style={{ position: 'absolute', top: 3, left: enabled ? 17 : 3, color: 'var(--t-accent)' }}
           />
-        )}
+        ) : null}
       </button>
     </div>
   );

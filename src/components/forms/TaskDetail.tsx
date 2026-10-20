@@ -6,7 +6,8 @@ import Drawer from '@/components/shared/Drawer';
 import { useFeedback } from '@/components/shared/Feedback';
 import { Blocker, Task } from '@/lib/queries/tasks';
 import { apiRequest, getErrorMessage } from '@/lib/client-api';
-import { PRIORITY_CONFIG, STAGE_CONFIG, formatRelativeTime } from '@/lib/utils';
+import { PRIORITY_CONFIG, STAGE_CONFIG, STAGE_TONE, formatRelativeTime } from '@/lib/utils';
+import Lamp from '@/components/shared/Lamp';
 
 interface TaskDetailProps {
   taskId: string;
@@ -210,15 +211,46 @@ function TaskDetailContent({ taskId, onClose }: TaskDetailProps) {
   const needsBlockerReason = stage === 'blocked' && task.stage !== 'blocked';
 
   return (
-    <Drawer open onClose={requestClose} title="任务详情">
-      <div className="space-y-5">
+    <Drawer
+      open
+      onClose={requestClose}
+      title="任务详情"
+      footer={(
+        <div className="drawer-actions">
+          <button
+            type="button"
+            onClick={() => setConfirmArchive(true)}
+            className="btn-secondary"
+            disabled={archiving}
+          >
+            <Archive size={14} aria-hidden="true" />
+            归档任务
+          </button>
+          <div className="flex items-center gap-2">
+            {dirty ? <span className="text-xs text-warning">有未保存修改</span> : null}
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving || !title.trim() || !dirty}
+              className="btn-primary px-5 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {saving ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : <Save size={14} aria-hidden="true" />}
+              {saving ? '保存中…' : '保存修改'}
+            </button>
+          </div>
+        </div>
+      )}
+    >
+      <div className="task-detail-form">
         <div
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
-          style={{ background: 'var(--t-bg-hover)', border: '1px solid var(--t-border)' }}
+          className="flex items-center gap-2 px-3 py-2 text-sm"
+          style={{ background: 'var(--t-bg-subtler)', border: '1px solid var(--t-border)', borderRadius: 2 }}
         >
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: task.project_color }} />
+          <Lamp tone={STAGE_TONE[task.stage] || 'idle'} />
+          <span aria-hidden="true" style={{ width: 6, height: 6, background: task.project_color, flexShrink: 0 }} />
           <span className="text-primary font-medium">{task.project_name}</span>
-          <span className="ml-auto text-xs text-muted">{STAGE_CONFIG[task.stage]?.label}</span>
+          <span className="micro-mono" style={{ marginLeft: 'auto' }}>#{task.id.slice(0, 6)}</span>
+          <span className="text-xs text-muted">{STAGE_CONFIG[task.stage]?.label}</span>
         </div>
 
         <div>
@@ -234,7 +266,7 @@ function TaskDetailContent({ taskId, onClose }: TaskDetailProps) {
           />
         </div>
 
-        <div>
+        <div className="task-detail-description">
           <label htmlFor="detail-description" className="block text-xs font-medium text-muted mb-1.5">描述</label>
           <textarea
             id="detail-description"
@@ -244,7 +276,7 @@ function TaskDetailContent({ taskId, onClose }: TaskDetailProps) {
             onChange={(event) => setDescription(event.target.value)}
             placeholder="补充目标、验收标准或上下文…"
             rows={4}
-            className="field-control px-3 py-2.5 text-sm placeholder:text-muted resize-y"
+            className="field-control px-3 py-2.5 text-sm placeholder:text-muted"
           />
         </div>
 
@@ -306,15 +338,19 @@ function TaskDetailContent({ taskId, onClose }: TaskDetailProps) {
 
         <div>
           <label htmlFor="detail-due-date" className="block text-xs font-medium text-muted mb-1.5">截止日期</label>
-          <input
-            id="detail-due-date"
-            name="detail-due-date"
-            type="date"
-            autoComplete="off"
-            value={dueDate}
-            onChange={(event) => setDueDate(event.target.value)}
-            className="field-control px-3 text-sm"
-          />
+          <div className={`date-field ${dueDate ? '' : 'date-field--empty'}`}>
+            <input
+              id="detail-due-date"
+              name="detail-due-date"
+              type="date"
+              lang="zh-CN"
+              autoComplete="off"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+              className="field-control px-3 text-sm"
+            />
+            {!dueDate ? <span className="date-field-hint" aria-hidden="true">选择日期</span> : null}
+          </div>
           <div className="flex items-center justify-between gap-2 mt-1.5">
             <p className="text-[11px] text-muted">
               {dueDate ? '到时会出现在时间线的对应日期' : '当前是长期任务，不设截止日期'}
@@ -380,29 +416,6 @@ function TaskDetailContent({ taskId, onClose }: TaskDetailProps) {
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-3 pt-3 border-t border-border">
-          <button
-            type="button"
-            onClick={() => setConfirmArchive(true)}
-            className="btn-secondary"
-            disabled={archiving}
-          >
-            <Archive size={14} aria-hidden="true" />
-            归档任务
-          </button>
-          <div className="flex items-center gap-2">
-            {dirty ? <span className="text-xs text-warning">有未保存修改</span> : null}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || !title.trim() || !dirty}
-              className="btn-primary px-5 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {saving ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : <Save size={14} aria-hidden="true" />}
-              {saving ? '保存中…' : '保存修改'}
-            </button>
-          </div>
-        </div>
       </div>
     </Drawer>
   );

@@ -31,10 +31,11 @@ interface DrawerProps {
   onClose: () => void;
   title?: string;
   children: React.ReactNode;
+  footer?: React.ReactNode;
   width?: string;
 }
 
-export default function Drawer({ open, onClose, title, children, width = '480px' }: DrawerProps) {
+export default function Drawer({ open, onClose, title, children, footer, width = '480px' }: DrawerProps) {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
@@ -124,11 +125,11 @@ export default function Drawer({ open, onClose, title, children, width = '480px'
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="h-full flex flex-col animate-slide-in-right overflow-hidden overscroll-contain"
+        className="drawer-panel h-full flex flex-col overflow-hidden overscroll-contain"
         style={{
           width,
           maxWidth: '92vw',
-          background: 'var(--t-card)',
+          background: 'var(--t-sidebar)',
           borderLeft: '1px solid var(--t-border)',
         }}
       >
@@ -149,6 +150,7 @@ export default function Drawer({ open, onClose, title, children, width = '480px'
         </div>
         {/* 内容 */}
         <div className="flex-1 overflow-y-auto p-5">{children}</div>
+        {footer ? <div className="drawer-footer">{footer}</div> : null}
       </div>
     </div>,
     document.body,

@@ -57,10 +57,10 @@ function completeTheme(theme: Theme): Theme {
       '--t-danger-subtler': alpha(danger, dark ? 0.12 : 0.08),
       '--t-success-subtle': alpha(success, dark ? 0.14 : 0.1),
       '--t-card-shadow-hover': dark
-        ? '0 10px 28px rgba(0,0,0,0.22)'
-        : '0 8px 24px rgba(15,23,42,0.08)',
-      '--t-radius-card': '8px',
-      '--t-radius-control': '7px',
+        ? '0 16px 40px rgba(0,0,0,0.34)'
+        : '0 12px 28px rgba(20,24,28,0.10)',
+      '--t-radius-card': '3px',
+      '--t-radius-control': '2px',
       ...theme.vars,
       '--t-border-strong': theme.vars['--t-border-hover'],
       '--t-accent-foreground': readableForeground(accent),
@@ -316,16 +316,51 @@ const LIGHT: Theme[] = [
   },
 ];
 
-// 默认主题：亮色 Indigo（近似 #FAFAFB 的中性底 + 靛蓝强调色）。
-// 它刻意不继承任何其它主题的调色板——历史上这里是 `{ ...DARK[2] }`（即 Linear），
-// 导致设置页里「Original Indigo」与「Linear」几乎是同一个主题。
-// 这里把 29 个令牌全部显式声明，不再展开任何其它主题的 vars，
-// 因此默认主题与其余 12 套之间没有任何隐式耦合。
-// 注意：每个令牌都必须与 globals.css 的 :root 回退值一致，
-// 否则首屏会先画出另一套颜色再被引导脚本纠正。scripts/check-theme-tokens.js 会强制校验。
-const DEFAULT: Theme = { id: 'default', name: 'Original Indigo', mode: 'light',
+// 默认主题（机台 · 石墨）：工业控制台方向。
+// 石墨黑面板 + 信号橙，是这一版重塑的默认身份；其余 14 套是保留的皮肤（含旧版 Indigo）。
+// 29 个令牌必须与 globals.css 的 :root 回退值逐条一致，否则首屏会先画出另一套颜色。
+// scripts/check-theme-tokens.js 会强制校验。
+const DEFAULT: Theme = { id: 'default', name: '机台 · 石墨', mode: 'dark',
   vars: {
-    // 亮色层级：surface 略灰、card 纯白，靠边框而不是阴影分层
+    '--t-surface': '#0E1115', '--t-sidebar': '#13171C', '--t-card': '#181D23', '--t-hover': '#1F252C',
+    '--t-primary': '#E8ECEF', '--t-muted': '#9AA4AE',
+    '--t-accent': '#FF6B2C', '--t-accent-hover': '#FF814E',
+    '--t-danger': '#FF5C5C', '--t-danger-hover': '#E5484D', '--t-warning': '#F5B83D', '--t-success': '#5FE3A1',
+    '--t-border': '#262C33', '--t-border-mid': '#323941', '--t-border-hover': '#414B55',
+    '--t-bg-hover': 'rgba(255,255,255,0.055)',
+    '--t-accent-subtle': 'rgba(255,107,44,0.16)', '--t-accent-subtler': 'rgba(255,107,44,0.10)',
+    '--t-accent-light': 'rgba(255,107,44,0.12)', '--t-accent-ghost': 'rgba(255,107,44,0.07)', '--t-accent-dim': 'rgba(255,107,44,0.04)',
+    '--t-danger-subtle': 'rgba(255,92,92,0.16)', '--t-danger-light': 'rgba(255,92,92,0.10)', '--t-danger-bg': 'rgba(255,92,92,0.06)',
+    '--t-warning-subtle': 'rgba(245,184,61,0.14)', '--t-muted-subtle': 'rgba(154,164,174,0.14)',
+    '--t-bg-light': 'rgba(255,255,255,0.09)',
+    '--t-card-shadow': 'none',
+    '--t-overlay': 'rgba(4,6,9,0.62)',
+  },
+};
+
+// 机台 · 铝白：同一套机台语言在亮色环境下的皮肤（铝面板 + 同一种信号橙）。
+const MACHINE_LIGHT: Theme = { id: 'machine-light', name: '机台 · 铝白', mode: 'light',
+  vars: {
+    '--t-surface': '#E9EBEC', '--t-sidebar': '#DFE2E4', '--t-card': '#F6F7F7', '--t-hover': '#FFFFFF',
+    '--t-primary': '#15191C', '--t-muted': '#59626B',
+    '--t-accent': '#C2410C', '--t-accent-hover': '#9A3412',
+    '--t-danger': '#B91C1C', '--t-danger-hover': '#991B1B', '--t-warning': '#8A5A00', '--t-success': '#0B7A53',
+    '--t-border': '#CDD3D7', '--t-border-mid': '#C2C9CE', '--t-border-hover': '#AAB3BA',
+    '--t-bg-hover': 'rgba(18,22,25,0.055)',
+    '--t-accent-subtle': 'rgba(194,65,12,0.12)', '--t-accent-subtler': 'rgba(194,65,12,0.08)',
+    '--t-accent-light': 'rgba(194,65,12,0.10)', '--t-accent-ghost': 'rgba(194,65,12,0.06)', '--t-accent-dim': 'rgba(194,65,12,0.035)',
+    '--t-danger-subtle': 'rgba(185,28,28,0.10)', '--t-danger-light': 'rgba(185,28,28,0.07)', '--t-danger-bg': 'rgba(185,28,28,0.045)',
+    '--t-warning-subtle': 'rgba(138,90,0,0.12)', '--t-muted-subtle': 'rgba(89,98,107,0.10)',
+    '--t-bg-light': 'rgba(18,22,25,0.07)',
+    '--t-card-shadow': '0 1px 2px rgba(16,18,20,0.06)',
+    '--t-overlay': 'rgba(10,12,14,0.4)',
+  },
+};
+
+// 旧默认主题保留为可选经典皮肤：习惯旧配色的用户可以切回去。
+// 它不再是默认，也不参与新界面的身份。
+const ORIGINAL_INDIGO: Theme = { id: 'original-indigo', name: 'Original Indigo', mode: 'light',
+  vars: {
     '--t-surface': '#FAFAFB', '--t-sidebar': '#F2F2F5', '--t-card': '#FFFFFF', '--t-hover': '#F1F1F4',
     '--t-primary': '#1B1C24', '--t-muted': '#666A7A',
     '--t-accent': '#5E6AD2', '--t-accent-hover': '#4E59C0',
@@ -342,6 +377,6 @@ const DEFAULT: Theme = { id: 'default', name: 'Original Indigo', mode: 'light',
   },
 };
 
-export const allThemes: Theme[] = [DEFAULT, ...DARK, ...LIGHT].map(completeTheme);
+export const allThemes: Theme[] = [DEFAULT, ...DARK, ...LIGHT, MACHINE_LIGHT, ORIGINAL_INDIGO].map(completeTheme);
 
 export const THEME_STORAGE_KEY = 'baton-theme';

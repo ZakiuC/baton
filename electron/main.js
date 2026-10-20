@@ -292,7 +292,7 @@ async function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: "Baton",
-    backgroundColor: "#FAFAFB",
+    backgroundColor: "#0E1115",
     // 使用原生标题栏，确保关闭/最小化/最大化始终可用
     frame: true,
     autoHideMenuBar: true,
@@ -458,7 +458,7 @@ if (!hasSingleInstanceLock) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#39;");
-      const errorPage = `<body style="background:#FAFAFB;color:#1B1C24;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2>启动失败</h2><p style="color:#DC2626">${safeMessage}</p></div></body>`;
+      const errorPage = `<body style="background:#0E1115;color:#E8ECEF;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0"><div style="text-align:center"><h2>启动失败</h2><p style="color:#DC2626">${safeMessage}</p></div></body>`;
       mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorPage)}`);
       mainWindow.show();
     }

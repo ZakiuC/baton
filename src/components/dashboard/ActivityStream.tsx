@@ -1,65 +1,39 @@
 import { ActivityLog } from '@/lib/queries/activity';
-import { getActivityDescription, formatRelativeTime } from '@/lib/utils';
+import { formatRelativeTime, getActivityActionLabel, getActivitySubject } from '@/lib/utils';
 
 interface ActivityStreamProps {
   activities: ActivityLog[];
 }
 
+/** 项目活动流：时间倒序，结果与时间各自成列，不再把时间粘在句尾。 */
 export default function ActivityStream({ activities }: ActivityStreamProps) {
-  if (activities.length === 0) {
-    return (
-      <section className="card p-4" aria-labelledby="activity-title">
-        <h2 id="activity-title" className="text-xs font-semibold text-primary mb-3">最近活动</h2>
-        <p className="text-[13px] text-muted text-center py-6">暂无活动记录</p>
-      </section>
-    );
+  const sorted = [...activities].sort((a, b) => b.created_at.localeCompare(a.created_at));
+
+  if (sorted.length === 0) {
+    return <p style={{ padding: '20px 0', textAlign: 'center', fontSize: 12, color: 'var(--t-muted)', margin: 0 }}>暂无活动记录</p>;
   }
 
   return (
-    <section className="card p-4" aria-labelledby="activity-title">
-      <h2 id="activity-title" className="text-xs font-semibold text-primary mb-3 px-1">最近活动</h2>
-      <div className="relative">
-        {/* 时间线竖线 */}
-        <div
-          className="absolute left-[15px] top-2 bottom-2 w-px"
-          style={{ background: 'var(--t-border)' }}
-        />
-
-        <ol className="space-y-0" aria-label="最近活动列表">
-          {activities.map((a) => (
-            <li
-              key={a.id}
-              className="flex items-start gap-3 py-2 pl-1"
-            >
-              {/* 时间线节点 */}
-              <div className="relative flex-shrink-0 mt-1.5 z-10">
-                <span
-                  className="block w-[10px] h-[10px] rounded-full border-2 border-card"
-                  style={{ backgroundColor: a.project_color || 'var(--t-border-mid)' }}
-                  aria-hidden="true"
-                />
-              </div>
-
-              {/* 内容 */}
-              <div className="flex-1 min-w-0 pt-0.5">
-                <p className="text-xs text-primary leading-relaxed break-words">
-                  {a.project_name && (
-                    <span
-                      className="font-medium mr-1 text-primary"
-                    >
-                      {a.project_name}
-                    </span>
-                  )}
-                  {getActivityDescription(a.action, a.detail, a.task_title || undefined)}
-                </p>
-                <p className="text-[10px] text-muted mt-0.5">
-                  {formatRelativeTime(a.created_at)}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
+    <div className="activity-stream">
+      <p className="micro" style={{ margin: '0 0 8px' }}>最近 {sorted.length} 条 · 时间倒序</p>
+      <ol className="log-list" aria-label="最近活动列表">
+        {sorted.map((activity) => (
+          <li key={activity.id} className="log-item">
+            <span className="log-rail">
+              <span className="log-dot" style={{ '--project-color': activity.project_color || 'var(--t-muted)' } as React.CSSProperties} />
+            </span>
+            <span className="log-body">
+              <span className="log-text">
+                {getActivitySubject(activity.action, activity.detail, activity.task_title, activity.project_name)}
+              </span>
+              <span className="log-meta">
+                <span className="log-action">{getActivityActionLabel(activity.action, activity.detail)}</span>
+                <span className="log-time">{formatRelativeTime(activity.created_at)}</span>
+              </span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

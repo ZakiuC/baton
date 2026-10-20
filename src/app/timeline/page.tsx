@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, CalendarDays, Infinity as InfinityIcon, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import {
   startOfWeek, endOfWeek, addWeeks, subWeeks,
   eachDayOfInterval, format, parseISO, isToday,
@@ -9,8 +9,9 @@ import {
 import { zhCN } from 'date-fns/locale';
 import { Task } from '@/lib/queries/tasks';
 import { Project } from '@/lib/queries/projects';
-import { PRIORITY_CONFIG, STAGE_CONFIG, isLongTermTask } from '@/lib/utils';
+import { PRIORITY_CONFIG, STAGE_CONFIG, STAGE_TONE, isLongTermTask } from '@/lib/utils';
 import TaskDetail from '@/components/forms/TaskDetail';
+import Lamp from '@/components/shared/Lamp';
 
 export default function TimelinePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -107,23 +108,14 @@ export default function TimelinePage() {
 
   if (loading) {
     return (
-      <div className="h-full flex flex-col animate-fade-in" aria-busy="true" aria-label="正在加载时间线">
-        <div className="px-6 py-3.5 border-b border-border flex items-center justify-between flex-shrink-0">
-          <div className="space-y-1.5">
-            <div className="skeleton h-4 w-16 rounded" />
-            <div className="skeleton h-3 w-40 rounded" />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="skeleton h-7 w-12 rounded-lg" />
-            <div className="skeleton h-7 w-40 rounded-lg" />
-          </div>
+      <div className="timeline-page" aria-busy="true" aria-label="正在加载时间线">
+        <div className="timeline-toolbar">
+          <div className="skeleton h-5 w-20" />
+          <div className="skeleton h-7 w-64" />
         </div>
-        <div className="flex-1 p-4 space-y-3">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="grid gap-0" style={{ gridTemplateColumns: '180px repeat(7, 1fr)' }}>
-              <div className="skeleton h-10 rounded mx-1" />
-              {[...Array(7)].map((_, j) => <div key={j} className="skeleton h-10 rounded mx-0.5" />)}
-            </div>
+        <div className="panel" style={{ padding: 12 }}>
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="skeleton h-12" style={{ marginTop: index === 0 ? 0 : 6 }} />
           ))}
         </div>
       </div>
@@ -131,261 +123,162 @@ export default function TimelinePage() {
   }
 
   return (
-    <div className="h-full flex flex-col animate-fade-in">
-      {/* 头部 */}
-      <div
-        className="px-5 py-3.5 flex items-center justify-between gap-4 flex-shrink-0"
-        style={{ borderBottom: '1px solid var(--t-border)' }}
-      >
+    <div className="timeline-page animate-fade-in">
+      <div className="timeline-toolbar">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-primary">时间线</h1>
-          <p className="text-xs text-muted mt-0.5">按周查看有截止日期的任务</p>
+          <h1 className="page-title" style={{ fontSize: 16 }}>时间线</h1>
+          <p className="page-sub">按周查看有截止日期的任务，长期任务单独成列</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="week-nav">
           <button
             type="button"
             onClick={() => setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }))}
-            className="btn-secondary"
+            className="btn-secondary btn-sm"
           >
             <CalendarDays size={12} aria-hidden="true" />
             今天
           </button>
-          <div className="flex items-center gap-0.5 rounded-lg border border-border overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setCurrentWeekStart((d) => subWeeks(d, 1))}
-              className="icon-button rounded-none border-r border-border"
-              aria-label="上一周"
-            >
-              <ChevronLeft size={15} aria-hidden="true" />
-            </button>
-            <span className="text-xs text-primary min-w-[148px] text-center font-medium px-1 select-none">
-              {format(currentWeekStart, 'M月d日', { locale: zhCN })} –{' '}
-              {format(weekEnd, 'M月d日', { locale: zhCN })}
-            </span>
-            <button
-              type="button"
-              onClick={() => setCurrentWeekStart((d) => addWeeks(d, 1))}
-              className="icon-button rounded-none border-l border-border"
-              aria-label="下一周"
-            >
-              <ChevronRight size={15} aria-hidden="true" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setCurrentWeekStart((date) => subWeeks(date, 1))}
+            className="icon-button"
+            aria-label="上一周"
+          >
+            <ChevronLeft size={15} aria-hidden="true" />
+          </button>
+          <span className="week-range">
+            {format(currentWeekStart, 'M月d日', { locale: zhCN })} – {format(weekEnd, 'M月d日', { locale: zhCN })}
+          </span>
+          <button
+            type="button"
+            onClick={() => setCurrentWeekStart((date) => addWeeks(date, 1))}
+            className="icon-button"
+            aria-label="下一周"
+          >
+            <ChevronRight size={15} aria-hidden="true" />
+          </button>
         </div>
       </div>
 
-      {/* 时间线主体 */}
-      <div className="flex-1 overflow-auto">
-        {error && tasks.length === 0 && projects.length === 0 ? (
-          <div className="grid min-h-full place-items-center p-6">
-            <div className="inline-feedback max-w-md" role="alert">
-              <AlertTriangle size={16} className="mt-0.5 flex-shrink-0 text-danger" aria-hidden="true" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-primary">时间线暂不可用</p>
-                <p className="mt-0.5 text-xs text-muted">{error}</p>
-                <button type="button" className="btn-secondary mt-3" onClick={() => { setLoading(true); void loadData(); }}>
-                  <RefreshCw size={12} aria-hidden="true" />
-                  重新加载
-                </button>
+      {error && tasks.length === 0 && projects.length === 0 ? (
+        <div className="panel" style={{ padding: 24, textAlign: 'center', maxWidth: 440, margin: '40px auto' }}>
+          <AlertTriangle size={18} style={{ color: 'var(--t-warning)', margin: '0 auto 8px' }} aria-hidden="true" />
+          <p style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>时间线暂不可用</p>
+          <p style={{ fontSize: 11, color: 'var(--t-muted)', marginTop: 4 }}>{error}</p>
+          <button type="button" className="btn-secondary btn-sm" style={{ marginTop: 12 }} onClick={() => { setLoading(true); void loadData(); }}>
+            <RefreshCw size={12} aria-hidden="true" />
+            重新加载
+          </button>
+        </div>
+      ) : (
+        <div className="timeline-wrap">
+          <div className="timeline-grid">
+            <div className="timeline-head">
+              <div className="timeline-head-cell timeline-head-cell--label">项目 / 周次</div>
+              {days.map((day) => {
+                const today = isToday(day);
+                return (
+                  <div key={day.toISOString()} className={`timeline-head-cell ${today ? 'timeline-head-cell--today' : ''}`}>
+                    <div className="timeline-weekday">{format(day, 'EEE', { locale: zhCN })}</div>
+                    <div className="timeline-date">{format(day, 'd')}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {activeProjects.length === 0 ? (
+              <div style={{ padding: 40, textAlign: 'center', fontSize: 12, color: 'var(--t-muted)' }}>
+                暂无可显示的项目
               </div>
-            </div>
-          </div>
-        ) : (
-        <div className="min-w-[820px]">
-          {/* 日期表头（粘性） */}
-          <div
-            className="grid sticky top-0 z-10"
-            style={{
-              gridTemplateColumns: '168px repeat(7, 1fr)',
-              background: 'var(--t-sidebar)',
-              borderBottom: '1px solid var(--t-border)',
-            }}
-          >
-            <div className="sticky left-0 z-20 px-4 py-2.5 text-[11px] font-semibold text-muted border-r border-border bg-sidebar">
-              项目
-            </div>
-            {days.map((day) => {
-              const today = isToday(day);
-              return (
-                <div
-                  key={day.toISOString()}
-                  className="px-2 py-2.5 text-center border-r border-border last:border-r-0"
-                  style={{ background: today ? 'var(--t-accent-ghost)' : undefined }}
-                >
-                  <div className={`text-[11px] font-medium ${today ? 'text-accent' : 'text-muted'}`}>
-                    {format(day, 'EEE', { locale: zhCN })}
+            ) : (
+              activeProjects.map((project) => (
+                <div key={project.id} className="timeline-row">
+                  <div className="timeline-project">
+                    <span
+                      aria-hidden="true"
+                      style={{ width: 6, height: 6, background: project.color, flexShrink: 0 }}
+                    />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={project.name}>
+                      {project.name}
+                    </span>
                   </div>
-                  <div
-                    className={`text-sm font-bold mt-0.5 font-mono ${today ? 'text-accent' : 'text-primary'}`}
-                  >
-                    {today ? (
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent text-white text-xs">
-                        {format(day, 'd')}
-                      </span>
-                    ) : (
-                      format(day, 'd')
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
-          {/* 项目行 */}
-          {activeProjects.length === 0 ? (
-            <div className="text-center text-sm text-muted py-16">暂无可显示的项目</div>
-          ) : (
-            activeProjects.map((project) => (
-              <div
-                key={project.id}
-                className="grid"
-                style={{
-                  gridTemplateColumns: '168px repeat(7, 1fr)',
-                  borderBottom: '1px solid var(--t-border)',
-                }}
-              >
-                {/* 项目名 */}
-                <div
-                  className="sticky left-0 z-[5] px-4 py-3 flex items-center gap-2 bg-surface"
-                  style={{ borderRight: '1px solid var(--t-border)' }}
-                >
-                  <span
-                    className="w-2 h-2 rounded-sm flex-shrink-0"
-                    style={{ backgroundColor: project.color }}
-                    aria-hidden="true"
-                  />
-                  <span className="text-xs text-primary truncate font-medium" title={project.name}>{project.name}</span>
-                </div>
-
-                {/* 每天 */}
-                {days.map((day) => {
-                  const dayTasks = tasksByProjectAndDay.get(`${project.id}:${format(day, 'yyyy-MM-dd')}`) || [];
-                  const today = isToday(day);
-                  return (
-                    <div
-                      key={day.toISOString()}
-                      className="px-1 py-1.5 min-h-[48px]"
-                      style={{
-                        borderRight: '1px solid var(--t-border)',
-                        background: today ? 'var(--t-accent-dim)' : undefined,
-                      }}
-                    >
-                      {dayTasks.map((task) => {
-                        const stageConfig = STAGE_CONFIG[task.stage];
-                        return (
+                  {days.map((day) => {
+                    const dayTasks = tasksByProjectAndDay.get(`${project.id}:${format(day, 'yyyy-MM-dd')}`) || [];
+                    const today = isToday(day);
+                    return (
+                      <div key={day.toISOString()} className={`timeline-cell ${today ? 'timeline-cell--today' : ''}`}>
+                        {dayTasks.slice(0, 3).map((task) => (
                           <button
                             type="button"
                             key={task.id}
                             onClick={() => setSelectedTaskId(task.id)}
-                            className="w-full text-left px-2 py-1.5 mb-1 rounded-md text-[11px] text-primary truncate transition-[background-color,border-color] hover:bg-bg-hover block font-medium"
-                            style={{
-                              backgroundColor: 'var(--t-bg-subtler)',
-                              borderLeft: `2px solid ${project.color}`,
-                            }}
-                            title={`${task.title} · ${stageConfig?.label}`}
+                            className="timeline-chip"
+                            title={`${task.title} · ${STAGE_CONFIG[task.stage]?.label}`}
                           >
                             {task.title}
                           </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            ))
-          )}
-        </div>
-        )}
-
-        {/* 长期任务：没有截止日期，因此不会出现在上面的周视图里，单独列出避免遗漏 */}
-        <section
-          className="mt-5 card overflow-hidden"
-          aria-labelledby="long-term-title"
-        >
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-            <div className="w-7 h-7 rounded-lg bg-accent-subtler flex items-center justify-center flex-shrink-0">
-              <InfinityIcon size={14} className="text-accent" aria-hidden="true" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 id="long-term-title" className="text-sm font-semibold text-primary">长期任务</h2>
-              <p className="text-xs text-muted mt-0.5">
-                没有截止日期、仍未完成的任务。它们不会出现在按日期铺排的周视图里。
-              </p>
-            </div>
-            <span className="badge text-muted bg-muted-subtle">{longTermCount} 项</span>
-          </div>
-
-          <div className="p-4">
-            {longTermCount === 0 ? (
-              <p className="py-4 text-center text-xs text-muted">
-                当前没有长期任务——所有未完成的任务都已设定截止日期。
-              </p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {activeProjects.map((project) => {
-                  const projectTasks = longTermByProject.get(project.id) || [];
-                  if (projectTasks.length === 0) return null;
-                  return (
-                    <div key={project.id} className="rounded-lg border border-border bg-bg-subtler p-3 self-start">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span
-                          className="w-2 h-2 rounded-sm flex-shrink-0"
-                          style={{ backgroundColor: project.color }}
-                          aria-hidden="true"
-                        />
-                        <h3 className="text-xs font-semibold text-primary truncate">{project.name}</h3>
-                        <span className="ml-auto text-[10px] font-mono text-muted flex-shrink-0">
-                          {projectTasks.length}
-                        </span>
+                        ))}
+                        {dayTasks.length > 3 ? (
+                          <span className="timeline-cell-overflow">+{dayTasks.length - 3}</span>
+                        ) : null}
                       </div>
-                      <ul className="space-y-1">
-                        {projectTasks.map((task) => {
-                          const stageConfig = STAGE_CONFIG[task.stage];
-                          const priorityConfig = PRIORITY_CONFIG[task.priority];
-                          return (
-                            <li key={task.id}>
-                              <button
-                                type="button"
-                                onClick={() => setSelectedTaskId(task.id)}
-                                className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-[background-color] hover:bg-bg-hover"
-                                aria-label={`打开任务：${task.title}`}
-                              >
-                                <span
-                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: stageConfig?.color }}
-                                  aria-hidden="true"
-                                />
-                                <span className="min-w-0 flex-1 truncate text-xs text-primary">
-                                  {task.title}
-                                </span>
-                                <span className={`badge flex-shrink-0 ${task.priority === 'urgent' ? 'text-danger bg-danger-light' : 'text-muted bg-muted-subtle'}`}>
-                                  {priorityConfig?.label || task.priority}
-                                </span>
-                                <span className="text-[10px] text-muted flex-shrink-0 hidden sm:inline">
-                                  {stageConfig?.label}
-                                </span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ))
             )}
           </div>
-        </section>
-      </div>
-
-      {selectedTaskId && (
-        <TaskDetail
-          taskId={selectedTaskId}
-          onClose={() => setSelectedTaskId(null)}
-        />
+        </div>
       )}
+
+      <section className="panel" aria-labelledby="long-term-title" style={{ overflow: 'hidden' }}>
+        <div className="panel-head">
+          <span className="panel-mark" aria-hidden="true" />
+          <h2 id="long-term-title" className="panel-title">长期任务</h2>
+          <span className="panel-index">没有截止日期、仍未完成</span>
+          <span className="badge badge--outline" style={{ marginLeft: 'auto' }}>{longTermCount} 项</span>
+        </div>
+
+        {longTermCount === 0 ? (
+          <p style={{ padding: '18px 12px', textAlign: 'center', fontSize: 11, color: 'var(--t-muted)', margin: 0 }}>
+            当前没有长期任务——所有未完成的任务都已设定截止日期。
+          </p>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+            {activeProjects.flatMap((project) => {
+              const projectTasks = longTermByProject.get(project.id) || [];
+              return projectTasks.map((task) => {
+                const priority = PRIORITY_CONFIG[task.priority];
+                return (
+                  <li key={task.id} className="long-term-item">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTaskId(task.id)}
+                      aria-label={`打开任务：${task.title}`}
+                    >
+                      <Lamp tone={STAGE_TONE[task.stage] || 'idle'} />
+                      <span
+                        aria-hidden="true"
+                        style={{ width: 5, height: 5, background: project.color, flexShrink: 0 }}
+                      />
+                      <span className="long-term-title">{task.title}</span>
+                      <span className={`prio-tick prio-tick--${task.priority}`} style={{ flexShrink: 0 }}>{priority?.label || task.priority}</span>
+                      <span className="micro" style={{ flexShrink: 0 }}>{STAGE_CONFIG[task.stage]?.label}</span>
+                      <span className="micro-mono" style={{ flexShrink: 0, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{project.name}</span>
+                    </button>
+                  </li>
+                );
+              });
+            })}
+          </ul>
+        )}
+      </section>
+
+      {selectedTaskId ? (
+        <TaskDetail taskId={selectedTaskId} onClose={() => setSelectedTaskId(null)} />
+      ) : null}
     </div>
   );
 }

@@ -1,10 +1,10 @@
-import { format, formatDistanceToNow, isToday, isTomorrow, isYesterday, isPast, parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, formatDistanceToNow, isToday, isTomorrow, isYesterday, isPast, parseISO } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 
-// 项目预设颜色
+// 项目预设颜色：机台方向的一组信号色（新项目使用；旧项目保留库里的原色）
 export const PROJECT_COLORS = [
-  '#6366F1', '#8B5CF6', '#EC4899', '#EF4444',
-  '#F59E0B', '#10B981', '#06B6D4', '#3B82F6',
+  '#E4572E', '#D9A514', '#2FA36B', '#3B82C4',
+  '#7C6BD6', '#C25B8A', '#6E7B86', '#B8BEC4',
 ];
 
 // 优先级配置
@@ -15,12 +15,22 @@ export const PRIORITY_CONFIG: Record<string, { label: string; color: string; bg:
   low: { label: '低', color: '#8888A0', bg: 'rgba(136,136,160,0.15)' },
 };
 
-// 阶段配置
+// 阶段配置：颜色一律走主题令牌，避免在浅色/深色皮肤里出现固定色。
 export const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
-  todo: { label: '待办', color: '#8888A0' },
-  in_progress: { label: '进行中', color: '#6366F1' },
-  blocked: { label: '阻塞', color: '#EF4444' },
-  done: { label: '已完成', color: '#10B981' },
+  todo: { label: '待办', color: 'var(--t-muted)' },
+  in_progress: { label: '进行中', color: 'var(--t-accent)' },
+  blocked: { label: '阻塞', color: 'var(--t-danger)' },
+  done: { label: '已完成', color: 'var(--t-success)' },
+  archived: { label: '已归档', color: 'var(--t-muted)' },
+};
+
+/** 阶段到状态灯的映射（机台方向：灯是唯一允许发光的元素）。 */
+export const STAGE_TONE: Record<string, 'idle' | 'accent' | 'danger' | 'done'> = {
+  todo: 'idle',
+  in_progress: 'accent',
+  blocked: 'danger',
+  done: 'done',
+  archived: 'idle',
 };
 
 /**
@@ -40,6 +50,42 @@ export const ACTION_LABELS: Record<string, string> = {
   'blocker_resolved': '解决了阻塞原因',
   'project_deleted': '永久删除了项目',
 };
+
+/** 距某个时间点过了几个日历日；空值返回 null。 */
+export function daysSince(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  return Math.max(0, differenceInCalendarDays(new Date(), parseISO(dateStr)));
+}
+
+/** 距离某个截止日还有几个日历日；空值返回 null，过期返回负数。 */
+export function daysUntil(dateStr: string | null | undefined): number | null {
+  if (!dateStr) return null;
+  return differenceInCalendarDays(parseISO(dateStr), new Date());
+}
+
+/** 活动流里「发生了什么」的短结果，用于日志的固定结果列。 */
+export function getActivityActionLabel(action: string, detail: string): string {
+  const d = parseActivityDetail(detail);
+  if (action === 'stage_changed' && d.from && d.to) {
+    return `${STAGE_CONFIG[d.from]?.label || d.from} → ${STAGE_CONFIG[d.to]?.label || d.to}`;
+  }
+  const labels: Record<string, string> = {
+    task_created: '创建任务',
+    blocker_added: '记录阻塞',
+    blocker_resolved: '解决阻塞',
+    project_deleted: '删除项目',
+  };
+  return labels[action] || ACTION_LABELS[action] || action;
+}
+
+/** 活动条目对应的任务名；没有任务时退回项目名。 */
+export function getActivitySubject(action: string, detail: string, taskTitle?: string | null, projectName?: string | null): string {
+  const d = parseActivityDetail(detail);
+  if (taskTitle) return taskTitle;
+  if (typeof d.title === 'string' && d.title) return d.title;
+  if (projectName) return projectName;
+  return ACTION_LABELS[action] || action;
+}
 
 // 日期格式化
 export function formatDate(dateStr: string | null): string {

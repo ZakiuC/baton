@@ -118,15 +118,19 @@ export default function TaskForm({ projects, defaultProjectId, onClose, onCreate
             <label htmlFor="task-due-date" className="block text-xs font-medium text-muted mb-1.5">
               截止日期
             </label>
-            <input
-              id="task-due-date"
-              name="task-due-date"
-              type="date"
-              autoComplete="off"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="field-control px-3 text-sm"
-            />
+            <div className={`date-field ${dueDate ? '' : 'date-field--empty'}`}>
+              <input
+                id="task-due-date"
+                name="task-due-date"
+                type="date"
+                lang="zh-CN"
+                autoComplete="off"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="field-control px-3 text-sm"
+              />
+              {!dueDate ? <span className="date-field-hint" aria-hidden="true">选择日期</span> : null}
+            </div>
           </div>
         </div>
 

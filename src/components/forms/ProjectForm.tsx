@@ -55,8 +55,8 @@ export default function ProjectForm({ onClose, onCreated, project }: ProjectForm
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* 颜色预览条 */}
         <div
-          className="h-1.5 rounded-full transition-[background-color] duration-300"
-          style={{ backgroundColor: color }}
+          aria-hidden="true"
+          style={{ height: 2, backgroundColor: color, transition: 'background-color 0.3s ease' }}
         />
 
         {/* 项目名称 */}
@@ -80,8 +80,8 @@ export default function ProjectForm({ onClose, onCreated, project }: ProjectForm
 
         {/* 项目描述 */}
         <div>
-          <label htmlFor="project-description" className="block text-xs font-medium text-muted mb-1.5">
-            描述 <span className="normal-case font-normal opacity-60">（可选）</span>
+          <label htmlFor="project-description" className="field-label">
+            描述 <span style={{ fontWeight: 400 }}>（可选）</span>
           </label>
           <textarea
             id="project-description"
@@ -97,7 +97,7 @@ export default function ProjectForm({ onClose, onCreated, project }: ProjectForm
 
         {/* 标识色 */}
         <div>
-          <span className="block text-xs font-medium text-muted mb-2">
+          <span className="field-label">
             标识色
           </span>
           <div className="flex gap-2 flex-wrap" role="group" aria-label="项目标识色">
@@ -108,13 +108,16 @@ export default function ProjectForm({ onClose, onCreated, project }: ProjectForm
                 onClick={() => setColor(c)}
                 aria-pressed={color === c}
                 aria-label={`选择颜色 ${c}`}
-                className="w-7 h-7 rounded-full transition-[transform,box-shadow] duration-150 flex items-center justify-center"
+                className="transition-[box-shadow] duration-150"
                 style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: 2,
                   backgroundColor: c,
+                  border: '1px solid rgba(0,0,0,0.25)',
                   boxShadow: color === c
-                    ? `0 0 0 2px var(--t-card), 0 0 0 4px ${c}`
-                    : '0 1px 3px rgba(0,0,0,0.3)',
-                  transform: color === c ? 'scale(1.2)' : 'scale(1)',
+                    ? '0 0 0 2px var(--t-card), 0 0 0 3px var(--t-accent)'
+                    : 'none',
                 }}
               />
             ))}

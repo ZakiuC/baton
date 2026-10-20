@@ -1205,7 +1205,10 @@ async function runElectronSuite() {
     await waitFor('absent', [{ selector: 'button', text: '恢复', ancestorSelector: 'div.rounded-lg', ancestorText: updatedTaskName }], '归档任务恢复后移出列表');
     equal((await api(`/api/tasks/${task.id}`)).stage, 'todo', '设置页必须将归档任务恢复到待办');
 
-    await click({ selector: 'a', text: updatedProjectName, exact: true });
+    // 重塑后项目入口移到顶部「项目」菜单，不再有常驻左侧栏，因此直接按 URL 返回项目。
+    await window.loadURL(`${baseUrl}/project/${project.id}`);
+    await delay(700);
+    await injectRendererHelper();
     await waitFor('pathIs', [`/project/${project.id}`], '返回恢复后的项目');
     await waitFor('exists', [{ selector: 'button', aria: `打开任务：${updatedTaskName}`, exact: true }], '恢复任务重新可编辑');
     const archiveProjectButton = { selector: 'button', aria: '归档项目', exact: true };

@@ -1,14 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  ArrowLeft,
-  BadgeCheck,
-  History,
-  Info,
-  Layers,
-  Tag,
-} from 'lucide-react';
+import { ArrowLeft, BadgeCheck, Tag } from 'lucide-react';
 import {
   APP_DESCRIPTION,
   APP_FEATURES,
@@ -24,144 +17,116 @@ export default function AboutPage() {
   const version = useAppVersion();
 
   return (
-    <div className="p-5 max-w-[820px] mx-auto space-y-5 animate-fade-in">
-      {/* 头部 */}
-      <div className="flex items-center gap-3">
-        <Link href="/settings" className="icon-button" aria-label="返回设置">
-          <ArrowLeft size={15} aria-hidden="true" />
-        </Link>
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-primary">关于</h1>
-          <p className="text-xs text-muted mt-0.5">软件说明与版本更新记录</p>
+    <div className="about-page animate-fade-in">
+      <div className="page-toolbar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link href="/settings" className="icon-button" aria-label="返回设置">
+            <ArrowLeft size={15} aria-hidden="true" />
+          </Link>
+          <div>
+            <h1 className="page-title" style={{ fontSize: 17 }}>关于</h1>
+            <p className="page-sub">软件说明与版本更新记录</p>
+          </div>
         </div>
+        <span className="micro-mono">本机 · v{version}</span>
       </div>
 
-      {/* 概要 */}
-      <section className="card p-5" aria-labelledby="about-title">
-        <div className="flex items-start gap-4">
-          {/* 「关于」页展示的就是应用图标本身，而不是图标库里的近似字形。 */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/icon.svg"
-            alt=""
-            width={44}
-            height={44}
-            className="w-11 h-11 rounded-xl flex-shrink-0"
-            aria-hidden="true"
-          />
-          <div className="min-w-0">
-            <h2 id="about-title" className="text-base font-semibold text-primary tracking-tight">
-              {APP_NAME_FULL}
-            </h2>
-            <p className="text-xs text-muted mt-0.5">{APP_TAGLINE}</p>
-            <div className="flex items-center gap-2 mt-2.5 flex-wrap">
-              <span className="badge text-accent bg-accent-subtle">
-                <Tag size={10} aria-hidden="true" />
-                v{version}
-              </span>
-              <span className="badge text-muted bg-muted-subtle">
-                <BadgeCheck size={10} aria-hidden="true" />
-                本地运行 · 不联网
-              </span>
-            </div>
+      <div className="stack">
+        <section className="panel" aria-labelledby="about-title-section">
+          <div className="panel-head">
+            <span className="panel-mark" aria-hidden="true" />
+            <h2 id="about-title-section" className="panel-title">设备铭牌</h2>
+            <span className="panel-index">不联网 · 不上传</span>
           </div>
-        </div>
-        <p className="mt-4 text-[13px] leading-relaxed text-muted">{APP_DESCRIPTION}</p>
-      </section>
-
-      {/* 主要功能 */}
-      <section className="card overflow-hidden" aria-labelledby="about-features">
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
-          <div className="w-7 h-7 rounded-lg bg-accent-subtler flex items-center justify-center flex-shrink-0">
-            <Layers size={14} className="text-accent" aria-hidden="true" />
-          </div>
-          <h2 id="about-features" className="text-sm font-semibold text-primary">主要功能</h2>
-        </div>
-        <dl className="p-4 grid gap-3 sm:grid-cols-2">
-          {APP_FEATURES.map((feature) => (
-            <div key={feature.title} className="rounded-lg border border-border bg-bg-subtler p-3">
-              <dt className="text-xs font-semibold text-primary">{feature.title}</dt>
-              <dd className="text-[11px] leading-relaxed text-muted mt-1">{feature.detail}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      {/* 技术信息 */}
-      <section className="card overflow-hidden" aria-labelledby="about-stack">
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
-          <div className="w-7 h-7 rounded-lg bg-accent-subtler flex items-center justify-center flex-shrink-0">
-            <Info size={14} className="text-accent" aria-hidden="true" />
-          </div>
-          <h2 id="about-stack" className="text-sm font-semibold text-primary">运行信息</h2>
-        </div>
-        <dl className="p-4 space-y-2.5">
-          {APP_STACK.map((row) => (
-            <div key={row.label} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
-              <dt className="text-[11px] font-medium text-muted sm:w-24 sm:flex-shrink-0">{row.label}</dt>
-              <dd className="text-xs text-primary break-all">{row.value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      {/* 更新记录 */}
-      <section className="card overflow-hidden" aria-labelledby="about-changelog">
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
-          <div className="w-7 h-7 rounded-lg bg-accent-subtler flex items-center justify-center flex-shrink-0">
-            <History size={14} className="text-accent" aria-hidden="true" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 id="about-changelog" className="text-sm font-semibold text-primary">更新记录</h2>
-            <p className="text-xs text-muted mt-0.5">
-              版本号遵循语义化版本（SemVer）：新功能升次版本，问题修复升修订号。
-              完整规则见仓库内 <code className="font-mono text-[11px]">docs/CONVENTIONS.md</code>。
-            </p>
-          </div>
-          <span className="badge text-muted bg-muted-subtle">{CHANGELOG.length} 个版本</span>
-        </div>
-
-        <div className="p-4">
-          {CHANGELOG.map((entry, index) => (
-            <article
-              key={entry.version}
-              className={index === 0 ? '' : 'mt-5 pt-5 border-t border-border'}
-              aria-label={`版本 ${entry.version}`}
-            >
-              <header className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm font-semibold text-primary font-mono">v{entry.version}</h3>
-                {index === 0 ? (
-                  <span className="badge text-accent bg-accent-subtle">当前版本</span>
-                ) : null}
-                {entry.released ? (
-                  <span className="text-[11px] text-muted">{entry.released}</span>
-                ) : (
-                  <span className="badge text-warning bg-warning-subtle">开发中</span>
-                )}
-              </header>
-              <p className="text-xs text-muted mt-1.5 leading-relaxed">{entry.summary}</p>
-
-              <div className="mt-3 space-y-3">
-                {entry.groups.map((group) => (
-                  <div key={group.kind}>
-                    <p className="text-[11px] font-semibold text-accent mb-1">
-                      {CHANGE_GROUP_LABELS[group.kind]}
-                    </p>
-                    <ul className="space-y-1">
-                      {group.items.map((item) => (
-                        <li key={item} className="flex gap-2 text-[11px] leading-relaxed text-muted">
-                          <span className="mt-[6px] w-1 h-1 rounded-full bg-muted flex-shrink-0" aria-hidden="true" />
-                          <span className="min-w-0">{item}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
+          <div style={{ padding: 14, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icon.svg" alt="" width={40} height={40} style={{ borderRadius: 5, flexShrink: 0 }} aria-hidden="true" />
+            <div style={{ minWidth: 0 }}>
+              <h2 id="about-title" style={{ margin: 0, fontSize: 15, fontWeight: 600, letterSpacing: '-0.01em' }}>{APP_NAME_FULL}</h2>
+              <p className="micro" style={{ margin: '2px 0 0' }}>{APP_TAGLINE}</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                <span className="badge" style={{ color: 'var(--t-accent)', background: 'var(--t-accent-subtle)' }}>
+                  <Tag size={10} aria-hidden="true" />
+                  v{version}
+                </span>
+                <span className="badge badge--outline">
+                  <BadgeCheck size={10} aria-hidden="true" />
+                  本地运行 · 不联网
+                </span>
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
+            </div>
+          </div>
+          <p style={{ margin: 0, padding: '0 14px 14px', fontSize: 13, lineHeight: 1.7, color: 'var(--t-muted)', maxWidth: '72ch' }}>
+            {APP_DESCRIPTION}
+          </p>
+        </section>
+
+        <section className="panel" id="about-features" aria-labelledby="about-features-title">
+          <div className="panel-head">
+            <span className="panel-mark" aria-hidden="true" />
+            <h2 id="about-features-title" className="panel-title">主要功能</h2>
+            <span className="panel-index">{APP_FEATURES.length} 项</span>
+          </div>
+          <dl style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 8, padding: 12, margin: 0 }}>
+            {APP_FEATURES.map((feature) => (
+              <div key={feature.title} className="about-feature">
+                <dt>{feature.title}</dt>
+                <dd>{feature.detail}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="panel" id="about-stack" aria-labelledby="about-stack-title">
+          <div className="panel-head">
+            <span className="panel-mark" aria-hidden="true" />
+            <h2 id="about-stack-title" className="panel-title">运行信息</h2>
+            <span className="panel-index">本机</span>
+          </div>
+          <dl className="kv" style={{ padding: 14 }}>
+            {APP_STACK.map((item) => (
+              <div key={item.label} style={{ display: 'contents' }}>
+                <dt>{item.label}</dt>
+                <dd style={{ fontFamily: item.label === '数据位置' ? 'var(--font-code)' : undefined }}>{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="panel" aria-labelledby="about-changelog">
+          <div className="panel-head">
+            <span className="panel-mark" aria-hidden="true" />
+            <h2 id="about-changelog" className="panel-title">更新记录</h2>
+            <span className="badge badge--outline" style={{ marginLeft: 'auto' }}>{CHANGELOG.length} 个版本</span>
+          </div>
+          <div style={{ padding: '14px 14px 6px' }}>
+            {CHANGELOG.map((entry, index) => (
+              <article key={entry.version} className="changelog-item" aria-label={`版本 ${entry.version}`}>
+                <div className="changelog-rail">
+                  <h3 className="changelog-version" style={{ margin: 0 }}>v{entry.version}</h3>
+                  {entry.released ? <div className="micro-mono" style={{ marginTop: 2 }}>{entry.released}</div> : <span className="badge" style={{ marginTop: 3, color: 'var(--t-warning)', background: 'var(--t-warning-subtle)' }}>开发中</span>}
+                  {index === 0 ? <div className="badge" style={{ marginTop: 4, color: 'var(--t-accent)', background: 'var(--t-accent-subtle)' }}>当前</div> : null}
+                </div>
+                <div className="changelog-body">
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.7, color: 'var(--t-primary)' }}>{entry.summary}</p>
+                  <div style={{ marginTop: 7 }}>
+                    {entry.groups.map((group) => (
+                      <div key={group.kind} style={{ marginTop: 6 }}>
+                        <p className="micro-mono" style={{ color: 'var(--t-accent)', margin: 0 }}>{CHANGE_GROUP_LABELS[group.kind]}</p>
+                        <ul className="changelog-list">
+                          {group.items.map((item) => (
+                            <li key={item}><span style={{ minWidth: 0 }}>{item}</span></li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
