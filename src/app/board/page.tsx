@@ -66,10 +66,12 @@ export default function BoardPage() {
     };
   }, [tasks]);
 
-  // 整张行都是拖拽区，因此必须把「点击打开」和「长按拖动」分开：
-  // 按住 250ms 才进入拖拽，短按交给 onClick 打开详情。
+  // 整张行都是拖拽区，因此必须把「点击打开」和「拖动」分开：
+  // 按下后移动超过 6px 即进入拖拽；原地短按交给 onClick 打开详情。
+  // 注意不要用 delay 激活：真实用户按下后通常立刻移动，长按 250ms
+  // 会把自然拖动判成「没有拖动」，这是曾经出现过的回归。
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -197,7 +199,7 @@ export default function BoardPage() {
       <div className="board-toolbar">
         <div>
           <h1 className="page-title" style={{ fontSize: 16 }}>看板</h1>
-          <p className="page-sub">拖动任务改变阶段；短按打开详情</p>
+          <p className="page-sub">拖动任务改变阶段；原地短按打开详情</p>
         </div>
 
         <div className="filter-chips" aria-label="项目筛选">

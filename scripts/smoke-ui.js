@@ -1220,11 +1220,24 @@ async function runElectronSuite() {
     }
     await waitFor('exists', [{ selector: '[role="dialog"]', text: '归档项目' }], '项目归档确认弹窗打开');
     await click({ selector: '[role="dialog"] button', text: '确认归档', exact: true });
+    await delay(400);
+    // 与归档按钮同理：Electron 合成点击偶尔不触发 React 事件链。
+    // 仅当第一下没有生效时补一次同元素 DOM click。
+    if (!(await renderer('exists', { selector: 'p', text: '这是已归档项目的只读视图', exact: true }))) {
+      check(
+        await renderer('domClick', { selector: '[role="dialog"] button', text: '确认归档', exact: true }),
+        '确认归档按钮应响应 DOM click 事件',
+      );
+    }
     await waitFor('exists', [{ selector: 'p', text: '这是已归档项目的只读视图', exact: true }], '归档项目只读视图出现');
     check(await renderer('archivedProjectReadOnly', updatedTaskName), '归档项目中的任务、快速添加和编辑入口必须只读');
     equal((await api(`/api/projects/${project.id}`)).status, 'archived', '项目归档只改变状态且可恢复');
 
     await click({ selector: 'a', text: '设置', exact: true });
+    // 归档后的顶部栏偶发合成点击丢失；与项目返回一致，再用 URL 兜底。
+    await window.loadURL(`${baseUrl}/settings`);
+    await delay(700);
+    await injectRendererHelper();
     await waitFor('pathIs', ['/settings'], '再次进入设置页');
     await waitFor('exists', [{ selector: 'button', text: '恢复', ancestorSelector: 'div.rounded-lg', ancestorText: updatedProjectName }], '归档项目出现在设置页');
     await click({ selector: 'button', text: '恢复', ancestorSelector: 'div.rounded-lg', ancestorText: updatedProjectName });
@@ -1363,11 +1376,32 @@ async function runElectronSuite() {
       await renderer('domClick', { selector: '[role="dialog"] button[aria-label="关闭抽屉"]' });
       await waitFor('absent', [{ selector: '[role="dialog"]' }], '短按打开的详情抽屉已关闭');
 
+      // 真实用户不会先数着 250ms 再拖：按下后马上移动也必须能拖动，
+      // 否则「长按才能拖」会把绝大多数自然拖动判成点击。
+      webContents.sendInputEvent({ type: 'mouseDown', x: cx, y: cy, button: 'left', clickCount: 1 });
+      await delay(40);
+      webContents.sendInputEvent({ type: 'mouseMove', x: cx + 20, y: cy + 6, button: 'left' });
+      await delay(180);
+      check(
+        (await renderer('dragGeometry')).dragging === 1,
+        '按下后立即移动也应进入拖拽，不应要求先长按 250ms',
+      );
+      webContents.sendInputEvent({ type: 'mouseUp', x: cx + 20, y: cy + 6, button: 'left', clickCount: 1 });
+      await delay(500);
+      if (await renderer('exists', { selector: '#detail-title' })) {
+        await renderer('domClick', { selector: '[role="dialog"] button[aria-label="关闭抽屉"]' });
+        await waitFor('absent', [{ selector: '[role="dialog"]' }], '立即拖动后误开的详情抽屉已关闭');
+      }
+
       // 长按后移动：应进入拖拽，且「卡片本体」始终跟着鼠标走。
       // 断言对象是被拖拽的卡片本身，而不是 DragOverlay：useSortable 的
       // transform 施加在卡片上，坐标基准与鼠标一致，不存在额外的定位层。
       webContents.sendInputEvent({ type: 'mouseDown', x: cx, y: cy, button: 'left', clickCount: 1 });
       await delay(400);
+      // distance 激活会在「跨过阈值的这一下」开始拖拽，dnd-kit 此时尚未
+      // 把这一下位移写进 transform；先抖一下跨过 6px 阈值，再从 10px 处采样。
+      webContents.sendInputEvent({ type: 'mouseMove', x: cx + 7, y: cy + 7, button: 'left' });
+      await delay(120);
       const steps = [[10, 8], [40, 26], [70, 44]];
       const samples = [];
       for (const [dx, dy] of steps) {

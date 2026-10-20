@@ -13,7 +13,7 @@
  *   3. 开发中的改动先累积在「未发布」分组，打包交付时再定版本号落地。
  */
 
-export const APP_VERSION = '2.3.0';
+export const APP_VERSION = '2.3.1';
 
 export interface ChangeGroup {
   /** 分组标题，使用 Conventional Commits 的类型词。 */
@@ -40,6 +40,26 @@ export const CHANGE_GROUP_LABELS: Record<ChangeGroup['kind'], string> = {
 
 /** 最新版本在最上方。 */
 export const CHANGELOG: VersionEntry[] = [
+  {
+    version: '2.3.1',
+    released: '2026-10-20',
+    summary: '修复任务拖拽失效：按下后立即移动即可拖动，提示条不再挡住其下控件。',
+    groups: [
+      {
+        kind: 'fix',
+        items: [
+          '修复看板任务拖不动：此前指针传感器要求按住 250ms 才进入拖拽，真实用户按下后立即移动会在 250ms 内越过 8px 容差，拖拽被取消、看起来像完全失效；改为移动超过 6px 即进入拖拽，原地短按仍打开详情。',
+          '修复底部提示条会拦截其下控件点击的问题：提示条改为点击穿透，只有关闭按钮可交互，不再挡住设置页归档/恢复等操作。',
+        ],
+      },
+      {
+        kind: 'chore',
+        items: [
+          'UI 冒烟新增「按下后立即移动也必须进入拖拽」回归断言（共 182 项）；对归档确认和归档后设置导航补合成点击兜底，减少 Electron 合成输入的误报。',
+        ],
+      },
+    ],
+  },
   {
     version: '2.3.0',
     released: '2026-10-20',

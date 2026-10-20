@@ -729,8 +729,10 @@ html {
     color: var(--t-primary);
     box-shadow: var(--t-card-shadow-hover);
     animation: slide-in-right 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
-    pointer-events: auto;
+    /* 提示是临时覆盖层，不能吃掉下方真实控件的点击；只有关闭按钮可交互。 */
+    pointer-events: none;
   }
+  .feedback-toast > button { pointer-events: auto; }
   .feedback-toast-success { border-left-color: var(--t-success); }
   .feedback-toast-success > svg { color: var(--t-success); }
   .feedback-toast-error { border-left-color: var(--t-danger); }
